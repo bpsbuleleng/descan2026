@@ -546,11 +546,20 @@ class Component extends React.Component {
         const ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0,w,h);
         let q=0.7,url=c.toDataURL('image/jpeg',q),bytes=Math.round(url.split(',')[1].length*3/4);
         while(bytes>200000&&q>0.32){q-=0.1;url=c.toDataURL('image/jpeg',q);bytes=Math.round(url.split(',')[1].length*3/4);}
-        this.setState(s=>({form:setPath(s.form,path,{src:url,before:before,after:bytes})}));
+        this.setState(s=>({form:setPath(s.form,path,{src:url,before:before,after:bytes,uploading:this.serverMode()})}));
+        if(this.serverMode()) this.uploadFotoServer(path,url,before,bytes);
       };
       img.src=ev.target.result;
     };
     reader.readAsDataURL(file); e.target.value='';
+  }
+  // Unggah foto ke Google Drive (mode server). Pratinjau lokal tampil dahulu,
+  // lalu src ditukar ke URL Drive saat sukses. Bila gagal, base64 dipertahankan.
+  uploadFotoServer(path,dataUrl,before,after){
+    return this.apiCall('uploadFoto',{id:this.state.form&&this.state.form.id,key:path,dataUrl:dataUrl}).then(res=>{
+      if(res&&res.ok&&res.url){ this.setState(s=>({form:setPath(s.form,path,{src:res.url,driveId:res.fileId,before:before,after:after})})); return true; }
+      this.setState(s=>({form:setPath(s.form,path,{src:dataUrl,before:before,after:after}),toast:{type:'err',msg:'Gagal unggah foto ke Drive: '+((res&&res.error)||'tidak diketahui')+' — tersimpan lokal.'}})); this.autoClear(); return false;
+    }).catch(()=>{ this.setState(s=>({form:setPath(s.form,path,{src:dataUrl,before:before,after:after}),toast:{type:'err',msg:'Foto tersimpan lokal — server tak terjangkau.'}})); this.autoClear(); return false; });
   }
 
   // -- Validasi FASIH: GALAT (blokir finalisasi) / PERINGATAN / KOSONG ----------
@@ -939,7 +948,7 @@ class Component extends React.Component {
       const fotoSlot=(slot,label,req)=>{ const ft=getPath(k,'rumah.foto.'+slot); const has=!!(ft&&ft.src); return (
         <div key={slot} style={css('display:flex;flex-direction:column;gap:7px;')}>
           <span style={css('font-size:12px;font-weight:600;color:#52576b;')}>{label}{req?<span style={css('color:'+ORANGE+';')}> *</span>:<span style={css('color:#9ba2b6;')}> (opsional)</span>}</span>
-          {has?(<div><div style={css('height:140px;border-radius:10px;overflow:hidden;background:#0c1422;')}><img src={ft.src} style={css('width:100%;height:100%;object-fit:cover;display:block;')} /></div><div style={css('display:flex;justify-content:space-between;align-items:center;margin-top:6px;')}><span style={css('font-size:10.5px;color:#52576b;font-family:Menlo,monospace;')}>{this.formatBytes(ft.before)} → {this.formatBytes(ft.after)}</span><button onClick={()=>this.hapusFoto('rumah.foto.'+slot)} style={css('font-size:11.5px;color:#dc2626;background:none;border:none;cursor:pointer;font-weight:700;font-family:inherit;padding:0;')}>Hapus</button></div></div>)
+          {has?(<div><div style={css('height:140px;border-radius:10px;overflow:hidden;background:#0c1422;')}><img src={ft.src} style={css('width:100%;height:100%;object-fit:cover;display:block;')} /></div><div style={css('display:flex;justify-content:space-between;align-items:center;margin-top:6px;')}><span style={css('font-size:10.5px;font-family:Menlo,monospace;color:'+(ft.uploading?'#b45309':(ft.driveId?'#166534':'#52576b'))+';')}>{ft.uploading?'⤓ mengunggah ke Drive…':(ft.driveId?'✓ tersimpan di Drive':this.formatBytes(ft.before)+' → '+this.formatBytes(ft.after))}</span><button onClick={()=>this.hapusFoto('rumah.foto.'+slot)} style={css('font-size:11.5px;color:#dc2626;background:none;border:none;cursor:pointer;font-weight:700;font-family:inherit;padding:0;')}>Hapus</button></div></div>)
           :(<label style={css('display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:140px;border:1.5px dashed #d4d4d0;border-radius:10px;background:repeating-linear-gradient(45deg,#f7f7f5,#f7f7f5 8px,#fafaf9 8px,#fafaf9 16px);cursor:pointer;text-align:center;padding:12px;')}><span style={css('font-size:13px;font-weight:700;color:#52576b;')}>Unggah Foto</span><span style={css('font-size:10.5px;color:#9ba2b6;font-family:Menlo,monospace;')}>auto-kompres &lt;200 KB</span><input type="file" accept="image/*" onChange={e=>this.handleFoto('rumah.foto.'+slot,e)} style={css('display:none;')} /></label>)}
         </div>); };
       return (<div>

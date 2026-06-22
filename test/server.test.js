@@ -32,6 +32,7 @@ function makeServer() {
     if (action === 'saveWarga') { const i = warga.findIndex((x) => x.id === payload.warga.id); if (i >= 0) warga[i] = payload.warga; else warga.push(payload.warga); return { ok: true }; }
     if (action === 'submitSanggahan') { sanggahan.push(payload.sanggahan); return { ok: true }; }
     if (action === 'updateSanggahan') { return { ok: true }; }
+    if (action === 'uploadFoto') { return { ok: true, fileId: 'F1', url: 'https://lh3.googleusercontent.com/d/F1=w1200' }; }
     if (action === 'reset') { return { ok: true }; }
     return { ok: false, error: 'unknown' };
   }
@@ -112,4 +113,19 @@ test('server mode: saving a draft writes straight to the spreadsheet with status
   assert.equal(last.payload.warga.status, 'draft');
   assert.equal(last.payload.warga.nama, 'KK Draf Server');
   assert.ok(srv.warga.some((w) => w.nama === 'KK Draf Server'), 'draft persisted to the (fake) spreadsheet');
+});
+
+test('server mode: a captured photo is uploaded to Drive and its URL stored on the form', async () => {
+  const srv = makeServer();
+  const c = serverInstance(srv);
+  c._cred = { username: 'operator', password: 'operator123' };
+  c.state.form = c.blankForm();
+  await c.uploadFotoServer('rumah.foto.depan', 'data:image/jpeg;base64,AAAA', 1000, 800);
+  await flush();
+  const ft = c.state.form.rumah.foto.depan;
+  assert.equal(ft.src, 'https://lh3.googleusercontent.com/d/F1=w1200'); // Drive URL, not base64
+  assert.equal(ft.driveId, 'F1');
+  const last = srv.calls[srv.calls.length - 1];
+  assert.equal(last.action, 'uploadFoto');
+  assert.equal(last.payload.dataUrl, 'data:image/jpeg;base64,AAAA');
 });

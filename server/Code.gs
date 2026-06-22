@@ -47,6 +47,7 @@ function handle(e) {
     if (action === 'deleteWarga')      return json(requireWrite(user, function(){ var p=req.payload||{}; return actionDeleteWarga(p.warga||p); }));
     if (action === 'submitSanggahan')  return json(requireWrite(user, function(){ var p=req.payload||{}; return actionSubmitSanggahan(p.sanggahan||p); }));
     if (action === 'updateSanggahan')  return json(requireWrite(user, function(){ return actionUpdateSanggahan(req.payload); }));
+    if (action === 'uploadFoto')       return json(requireWrite(user, function(){ return actionUploadFoto(req.payload || {}); }));
     if (action === 'reset')            return json(requireWrite(user, function(){ seedData(true); return { ok: true }; }));
 
     return json({ ok: false, error: 'Action tidak dikenal: ' + action });
@@ -151,8 +152,31 @@ function stripFoto(fotoObj) {
   if (!fotoObj) return;
   Object.keys(fotoObj).forEach(function(k){
     var f = fotoObj[k];
-    if (f && f.src) fotoObj[k] = { has: true, before: f.before, after: f.after };
+    // Hanya buang base64 (data:) agar muat di sel; URL Google Drive dipertahankan.
+    if (f && f.src && String(f.src).indexOf('data:') === 0) fotoObj[k] = { has: true, before: f.before, after: f.after };
   });
+}
+
+// ---- Foto di Google Drive --------------------------------------------------
+function getFotoFolder() {
+  var name = 'DTSEN Desa - Foto';
+  var it = DriveApp.getFoldersByName(name);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(name);
+}
+// Simpan satu foto (data URL base64) ke Drive, link publik (anyone with link),
+// kembalikan { fileId, url }. Nama file = <wargaId>__<key> agar ganti foto menimpa.
+function actionUploadFoto(p) {
+  if (!p || !p.dataUrl) return { ok: false, error: 'Data foto kosong.' };
+  var m = /^data:(image\/[\w.+-]+);base64,([\s\S]+)$/.exec(String(p.dataUrl));
+  if (!m) return { ok: false, error: 'Format data URL tidak valid.' };
+  var name = (p.id || 'foto') + '__' + String(p.key || 'foto').replace(/[^\w]+/g, '_') + '.jpg';
+  var folder = getFotoFolder();
+  var existing = folder.getFilesByName(name);
+  while (existing.hasNext()) existing.next().setTrashed(true);
+  var blob = Utilities.newBlob(Utilities.base64Decode(m[2]), m[1], name);
+  var file = folder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return { ok: true, fileId: file.getId(), url: 'https://lh3.googleusercontent.com/d/' + file.getId() + '=w1200' };
 }
 function toWargaRow(w) {
   // Foto base64 dilepas dari dataJson agar muat di sel (batas 50.000 char).

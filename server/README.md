@@ -70,8 +70,15 @@ a–f, keluhan kesehatan a–r, dll). Tidak perlu kolom baru per field.
 - Kolom **`status`** (`draft`/`final`) ditambahkan ke sheet `Warga`. **Simpan Draf**
   dari aplikasi menulis baris ber-`status=draft` **langsung ke spreadsheet**;
   **Finalisasi** menulis `status=final` (hanya bila tidak ada GALAT).
-- Foto (base64) **tidak** disimpan ke sheet — di-strip dari `snapshots[].foto`
-  dan `rumah.foto` (R21) sebelum ditulis. Untuk foto terpusat: Google Drive (lanjutan).
+- **Foto disimpan di Google Drive** (mode server). Saat foto diambil, aplikasi
+  mengompres (≤200KB) lalu mengunggah via aksi `uploadFoto` → Apps Script menulis
+  file ke folder **"DTSEN Desa - Foto"** (akses *anyone with link*) dan
+  mengembalikan URL `lh3.googleusercontent.com/d/<id>`. Yang disimpan di
+  `rumah.foto`/sheet hanyalah **URL** (kecil), bukan base64. `stripFoto` hanya
+  membuang base64 (`data:`), URL Drive dipertahankan. Foto pengganti menimpa file
+  bernama sama (`<wargaId>__<key>`). Mode lokal tetap memakai base64 di perangkat.
+  > Karena memakai `DriveApp`, **redeploy** akan meminta **izin Google Drive** baru —
+  > setujui saat diminta.
 - Sheet `Warga` yang **sudah ter-deploy** otomatis ditambahi header kolom `status`
   pada permintaan berikutnya (`ensureWargaHeader()`); baris lama tetap terbaca
   (status diambil dari `dataJson`). Tetap lakukan **redeploy versi baru** setelah
