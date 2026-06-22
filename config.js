@@ -5,5 +5,5 @@
 //                   Tempel URL Web App hasil deploy (lihat server/README.md), mis.
 //                   'https://script.google.com/macros/s/AKfycb..../exec'
 window.DTSEN_CONFIG = {
-  apiUrl: ''
+  apiUrl: 'https://script.google.com/macros/s/AKfycbyIQMf6bRYfdgPcvLkuqD0UgdjN6a-makhEBSv8gL2dthOzKezHmixX9myWpLaFw7U8eg/exec'
 };
