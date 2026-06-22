@@ -50,7 +50,9 @@ function makeReact() {
 }
 
 // Load a fresh app context. Returns { Component, css, errors }.
-function loadApp() {
+// opts.apiUrl + opts.fetch enable "server mode" (Google Sheets) for tests.
+function loadApp(opts) {
+  opts = opts || {};
   const src = fs.readFileSync(SRC, 'utf8');
   let code;
   try {
@@ -67,20 +69,28 @@ function loadApp() {
     document: { getElementById: () => ({}) },
     setTimeout: () => 0,
     clearTimeout: () => {},
+    Promise,
     console
   };
   sandbox.window.window = sandbox.window;
+  if (opts.apiUrl) sandbox.window.DTSEN_CONFIG = { apiUrl: opts.apiUrl };
+  if (opts.fetch) sandbox.window.fetch = opts.fetch;
   vm.createContext(sandbox);
   vm.runInContext(code, sandbox, { filename: 'app.jsx.compiled.js' });
   return { Component: sandbox.__APP__.Component, css: sandbox.__APP__.css, sandbox };
 }
 
 // Create a Component instance with optional state overrides.
-function makeInstance(overrides) {
-  const { Component } = loadApp();
-  const c = new Component({ namaDesa: 'Desa Sukamaju', namaOperator: 'Budi Santoso' });
+function makeInstance(overrides, opts) {
+  const { Component } = loadApp(opts);
+  const c = new Component({ namaDesa: 'Kec. Tejakula, Buleleng', namaOperator: 'Komang Sutarja' });
   if (overrides) c.state = Object.assign({}, c.state, overrides);
   return c;
+}
+
+// Flush pending promise microtasks (lets sandbox .then() chains settle).
+function flush() {
+  return new Promise((res) => setImmediate(res));
 }
 
 // Serialize a render() tree to a searchable string (props strings + text children).
@@ -88,4 +98,4 @@ function treeText(node) {
   try { return JSON.stringify(node); } catch (e) { return ''; }
 }
 
-module.exports = { loadApp, makeInstance, compile, treeText, BANNER, SRC, ROOT };
+module.exports = { loadApp, makeInstance, compile, treeText, flush, BANNER, SRC, ROOT };

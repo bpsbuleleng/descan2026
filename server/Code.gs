@@ -220,11 +220,13 @@ function seedUsers() {
   var sh = sheet(SHEETS.USERS);
   if (sh.getLastRow() > 1) return;
   var rows = [
-    ['kepaladesa', 'desa123', 'H. Sutrisno', 'Kepala Desa', ''],
-    ['operator', 'operator123', 'Budi Santoso', 'Operator', ''],
-    ['sls.krajan', 'sls123', 'Sarno', 'Kepala SLS', 'Dusun Krajan'],
-    ['sls.ngasem', 'sls123', 'Yatmin', 'Kepala SLS', 'Dusun Ngasem'],
-    ['sls.sukamulya', 'sls123', 'Marni', 'Kepala SLS', 'Dusun Sukamulya']
+    ['kepaladesa', 'desa123', 'I Gusti Ngurah Rai', 'Kepala Desa', ''],
+    ['operator', 'operator123', 'Komang Sutarja', 'Operator', ''],
+    ['sls.sambirenteng', 'sls123', 'I Nyoman Lestari', 'Kepala SLS', 'Banjar Dinas Sambirenteng'],
+    ['sls.penyumbahan', 'sls123', 'I Ketut Wirya', 'Kepala SLS', 'Banjar Dinas Penyumbahan'],
+    ['sls.penuktukan', 'sls123', 'I Wayan Sudiarta', 'Kepala SLS', 'Banjar Dinas Penuktukan'],
+    ['sls.tembok', 'sls123', 'I Made Astawan', 'Kepala SLS', 'Banjar Dinas Tembok'],
+    ['sls.ngis', 'sls123', 'I Gede Mariana', 'Kepala SLS', 'Banjar Dinas Ngis']
   ];
   sh.getRange(2, 1, rows.length, USER_COLS.length).setValues(rows);
 }
@@ -234,10 +236,15 @@ function seedData(force) {
   if (force) { if (sh.getLastRow() > 1) sh.deleteRows(2, sh.getLastRow() - 1); }
   else if (sh.getLastRow() > 1) return;
 
+  // Subset perwakilan 3 desa Tejakula (data lengkap 18 KK ada di aplikasi; operator
+  // dapat menambah/mendorong selebihnya). desa disimpan di dalam dataJson juga.
   var seed = [
-    { id: 'w1', noKK: '3204150607080001', nik: '3204151005780002', nama: 'Slamet Riyadi', dusun: 'Dusun Krajan', rt: '002', rw: '001', alamat: 'Jl. Melati No. 12', desil: 3, bansos: 'PKH' },
-    { id: 'w2', noKK: '3204150607080002', nik: '3204154208600003', nama: 'Sukinem', dusun: 'Dusun Ngasem', rt: '001', rw: '001', alamat: 'Jl. Mawar No. 4', desil: 2, bansos: 'PKH + BPNT' },
-    { id: 'w5', noKK: '3204150607080005', nik: '3204156504880006', nama: 'Sri Wahyuni', dusun: 'Dusun Sukamulya', rt: '001', rw: '003', alamat: 'Jl. Dahlia No. 3', desil: 6, bansos: 'Tidak Ada' }
+    { id: 'w01', noKK: '5108150101010001', nik: '5108150101800001', nama: 'I Wayan Sukra', desa: 'Desa Sambirenteng', dusun: 'Banjar Dinas Sambirenteng', rt: '001', rw: '001', alamat: 'Jl. Air Sanih Gg. Melati', desil: 1, bansos: 'PKH + BPNT' },
+    { id: 'w05', noKK: '5108150103010005', nik: '5108151009820005', nama: 'I Gede Suardika', desa: 'Desa Sambirenteng', dusun: 'Banjar Dinas Bantes', rt: '001', rw: '003', alamat: 'Br. Bantes', desil: 10, bansos: 'Tidak Ada' },
+    { id: 'w07', noKK: '5108150201010007', nik: '5108150201750007', nama: 'I Nyoman Reta', desa: 'Desa Penuktukan', dusun: 'Banjar Dinas Penuktukan', rt: '001', rw: '001', alamat: 'Jl. Singaraja-Amlapura', desil: 2, bansos: 'PKH + BPNT' },
+    { id: 'w12', noKK: '5108150203010012', nik: '5108150512720012', nama: 'I Komang Wirawan', desa: 'Desa Penuktukan', dusun: 'Banjar Dinas Kawanan', rt: '002', rw: '003', alamat: 'Br. Kawanan No. 1', desil: 10, bansos: 'Tidak Ada' },
+    { id: 'w13', noKK: '5108150301010013', nik: '5108150301680013', nama: 'I Wayan Repot', desa: 'Desa Tembok', dusun: 'Banjar Dinas Tembok', rt: '001', rw: '001', alamat: 'Jl. Tembok-Tejakula', desil: 1, bansos: 'PKH' },
+    { id: 'w16', noKK: '5108150302010016', nik: '5108152610830016', nama: 'I Made Suarjana', desa: 'Desa Tembok', dusun: 'Banjar Dinas Dukuh', rt: '002', rw: '002', alamat: 'Br. Dukuh Kaja', desil: 9, bansos: 'Tidak Ada' }
   ];
   var rows = seed.map(function(w){
     var data = Object.assign({}, w, { anggota: [w.nama], snapshots: [
@@ -250,8 +257,8 @@ function seedData(force) {
   var ssh = sheet(SHEETS.SANGGAHAN);
   if (force && ssh.getLastRow() > 1) ssh.deleteRows(2, ssh.getLastRow() - 1);
   if (ssh.getLastRow() <= 1) {
-    ssh.appendRow(['s1', 'w1', today(), 'Slamet Riyadi', '3204151005780002', 'Warga Bersangkutan',
-      'Penghasilan menurun karena tidak lagi bekerja, mohon ditinjau ulang.', 'Diajukan', today(), '', '']);
+    ssh.appendRow(['s1', 'w13', today(), 'Kelian Banjar Dinas Tembok', '-', 'RT/RW',
+      'Pak I Wayan Repot menyandang disabilitas dan tinggal menumpang. Mohon diprioritaskan bantuan tambahan.', 'Diajukan', today(), '', '']);
   }
 }
 

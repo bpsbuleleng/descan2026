@@ -20,14 +20,26 @@ test('css() parses inline-style strings into a React style object', () => {
   assert.deepEqual(plain(''), {});
 });
 
-test('seed data has the expected shape', () => {
+test('seed data has the expected shape (Buleleng: 3 desa)', () => {
   const c = makeInstance();
-  assert.equal(c.seedWarga().length, 8);
-  assert.equal(c.seedSanggahan().length, 3);
-  c.seedWarga().forEach((w) => {
+  const W = c.seedWarga();
+  assert.equal(W.length, 18);
+  assert.equal(c.seedSanggahan().length, 5);
+  W.forEach((w) => {
     assert.ok(w.desil >= 1 && w.desil <= 10, 'desil in 1..10 for ' + w.nama);
     assert.ok(Array.isArray(w.snapshots) && w.snapshots.length >= 1);
+    assert.ok(w.desa && w.dusun, 'desa & dusun set for ' + w.nama);
   });
+  // The three target villages are all represented.
+  const desaSet = new Set(W.map((w) => w.desa));
+  ['Desa Sambirenteng', 'Desa Penuktukan', 'Desa Tembok'].forEach((d) => assert.ok(desaSet.has(d), 'missing ' + d));
+  // "Semua kemungkinan kasus": every decile 1..10 appears, all bansos types, all sanggahan statuses.
+  const deciles = new Set(W.map((w) => w.desil));
+  for (let d = 1; d <= 10; d++) assert.ok(deciles.has(d), 'missing decile ' + d);
+  const bansos = new Set(W.map((w) => w.bansos));
+  ['Tidak Ada', 'PKH', 'BPNT', 'PKH + BPNT'].forEach((b) => assert.ok(bansos.has(b), 'missing bansos ' + b));
+  const statuses = new Set(c.seedSanggahan().map((s) => s.status));
+  ['Diajukan', 'Diproses', 'Diterima', 'Ditolak'].forEach((s) => assert.ok(statuses.has(s), 'missing status ' + s));
 });
 
 test('canCrud(): only Operator and Kepala Desa', () => {
@@ -39,11 +51,11 @@ test('canCrud(): only Operator and Kepala Desa', () => {
 
 test('visibleWarga(): Kepala SLS is scoped to its wilayah', () => {
   const all = makeInstance({ auth: { role: 'Operator' } }).visibleWarga();
-  assert.equal(all.length, 8);
+  assert.equal(all.length, 18);
 
-  const sls = makeInstance({ auth: { role: 'Kepala SLS', wilayah: 'Dusun Krajan' } }).visibleWarga();
-  assert.ok(sls.length > 0 && sls.length < 8);
-  assert.ok(sls.every((w) => w.dusun === 'Dusun Krajan'));
+  const sls = makeInstance({ auth: { role: 'Kepala SLS', wilayah: 'Banjar Dinas Tembok' } }).visibleWarga();
+  assert.ok(sls.length > 0 && sls.length < 18);
+  assert.ok(sls.every((w) => w.dusun === 'Banjar Dinas Tembok'));
 });
 
 test('hitungDesil(): wealthier household ranks in a higher decile than a poorer one', () => {
@@ -78,14 +90,14 @@ test('login(): rejects bad credentials, accepts a valid demo account', () => {
   assert.equal(ok.state.auth.role, 'Operator');
 
   const sls = makeInstance();
-  sls.state.loginForm = { username: 'sls.krajan', password: 'sls123', error: '' };
+  sls.state.loginForm = { username: 'sls.tembok', password: 'sls123', error: '' };
   sls.login();
   assert.equal(sls.state.auth.role, 'Kepala SLS');
-  assert.equal(sls.state.auth.wilayah, 'Dusun Krajan');
+  assert.equal(sls.state.auth.wilayah, 'Banjar Dinas Tembok');
 });
 
 test('CRUD handlers are no-ops for a read-only Kepala SLS', () => {
-  const sls = makeInstance({ auth: { role: 'Kepala SLS', wilayah: 'Dusun Krajan' } });
+  const sls = makeInstance({ auth: { role: 'Kepala SLS', wilayah: 'Banjar Dinas Tembok' } });
   const before = sls.state.view;
   sls.onTambah();
   assert.equal(sls.state.view, before, 'onTambah must not open the form for SLS');

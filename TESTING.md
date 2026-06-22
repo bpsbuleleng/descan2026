@@ -16,8 +16,9 @@ node --test       # jalankan test saja (tanpa build ulang)
 
 | File | Menguji |
 |------|---------|
-| [test/logic.test.js](test/logic.test.js)  | Logika murni: `canCrud`, `visibleWarga`, `hitungDesil`, formatter, `login`, seed data |
+| [test/logic.test.js](test/logic.test.js)  | Logika murni: `canCrud`, `visibleWarga`, `hitungDesil`, formatter, `login`, seed data (3 desa Buleleng, semua kasus) |
 | [test/render.test.js](test/render.test.js) | Hasil `render()` per peran — gating CRUD & pembatasan wilayah pada pohon elemen |
+| [test/server.test.js](test/server.test.js) | Lapisan sinkronisasi Google Sheets (mode server) dengan `fetch` tiruan |
 | [test/build.test.js](test/build.test.js)  | `vendor/app.js` harus hasil build terbaru dari `src/app.jsx` |
 
 ## Aturan: setiap fitur baru wajib disertai test

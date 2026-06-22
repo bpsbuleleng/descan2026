@@ -40,35 +40,117 @@ class Component extends React.Component {
     this.ACCOUNTS = [{
       username: 'kepaladesa',
       password: 'desa123',
-      nama: 'H. Sutrisno',
+      nama: 'I Gusti Ngurah Rai',
       role: 'Kepala Desa',
       wilayah: null
     }, {
       username: 'operator',
       password: 'operator123',
-      nama: 'Budi Santoso',
+      nama: 'Komang Sutarja',
       role: 'Operator',
       wilayah: null
     }, {
-      username: 'sls.krajan',
+      username: 'sls.sambirenteng',
       password: 'sls123',
-      nama: 'Sarno',
+      nama: 'I Nyoman Lestari',
       role: 'Kepala SLS',
-      wilayah: 'Dusun Krajan'
+      wilayah: 'Banjar Dinas Sambirenteng'
     }, {
-      username: 'sls.ngasem',
+      username: 'sls.penyumbahan',
       password: 'sls123',
-      nama: 'Yatmin',
+      nama: 'I Ketut Wirya',
       role: 'Kepala SLS',
-      wilayah: 'Dusun Ngasem'
+      wilayah: 'Banjar Dinas Penyumbahan'
     }, {
-      username: 'sls.sukamulya',
+      username: 'sls.penuktukan',
       password: 'sls123',
-      nama: 'Marni',
+      nama: 'I Wayan Sudiarta',
       role: 'Kepala SLS',
-      wilayah: 'Dusun Sukamulya'
+      wilayah: 'Banjar Dinas Penuktukan'
+    }, {
+      username: 'sls.tembok',
+      password: 'sls123',
+      nama: 'I Made Astawan',
+      role: 'Kepala SLS',
+      wilayah: 'Banjar Dinas Tembok'
+    }, {
+      username: 'sls.ngis',
+      password: 'sls123',
+      nama: 'I Gede Mariana',
+      role: 'Kepala SLS',
+      wilayah: 'Banjar Dinas Ngis'
     }];
+    // Konfigurasi server opsional. Bila window.DTSEN_CONFIG.apiUrl diisi (lihat
+    // config.js), aplikasi memakai Google Sheets via Apps Script sebagai database;
+    // bila kosong, aplikasi berjalan murni lokal (localStorage) seperti semula.
+    var CFG = typeof window !== 'undefined' && window.DTSEN_CONFIG || {};
+    this.apiUrl = String(CFG.apiUrl || '').trim();
+    this._cred = null; // kredensial di memori untuk dilampirkan ke tiap permintaan
     this.state = this.initState();
+  }
+
+  // -- Lapisan server (Google Sheets via Apps Script) --------------------------
+  serverMode() {
+    return !!this.apiUrl;
+  }
+  apiCall(action, payload) {
+    return window.fetch(this.apiUrl, {
+      method: 'POST',
+      // text/plain agar tidak memicu CORS preflight ke Apps Script.
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8'
+      },
+      body: JSON.stringify({
+        action: action,
+        auth: this._cred || null,
+        payload: payload || {}
+      })
+    }).then(function (r) {
+      return r.json();
+    });
+  }
+  bootstrap() {
+    if (!this.serverMode()) return;
+    this.apiCall('bootstrap', {}).then(res => {
+      if (res && res.ok) {
+        this.setState({
+          warga: res.warga || [],
+          sanggahan: res.sanggahan || []
+        });
+      }
+    }).catch(() => {
+      this.setState({
+        toast: {
+          type: 'err',
+          msg: 'Gagal memuat data dari server. Menampilkan data lokal.'
+        }
+      });
+      this.autoClear();
+    });
+  }
+  // Dorong perubahan ke server (no-op di mode lokal). Kegagalan tidak memblokir
+  // state lokal — hanya memunculkan notifikasi.
+  push(action, payload) {
+    if (!this.serverMode()) return;
+    this.apiCall(action, payload).then(res => {
+      if (!res || !res.ok) {
+        this.setState({
+          toast: {
+            type: 'err',
+            msg: 'Sinkron server gagal: ' + (res && res.error || 'tidak diketahui')
+          }
+        });
+        this.autoClear();
+      }
+    }).catch(() => {
+      this.setState({
+        toast: {
+          type: 'err',
+          msg: 'Server tidak terjangkau — perubahan tersimpan lokal.'
+        }
+      });
+      this.autoClear();
+    });
   }
 
   // -- Sesi login --------------------------------------------------------------
@@ -104,28 +186,12 @@ class Component extends React.Component {
       })
     }));
   }
-  login(e) {
-    if (e && e.preventDefault) e.preventDefault();
-    const f = this.state.loginForm;
-    const u = (f.username || '').trim().toLowerCase();
-    const acc = this.ACCOUNTS.find(a => a.username === u && a.password === f.password);
-    if (!acc) {
-      this.setState(s => ({
-        loginForm: Object.assign({}, s.loginForm, {
-          error: 'Username atau kata sandi salah.'
-        })
-      }));
-      return;
+  loginOk(auth, persist) {
+    if (persist) {
+      try {
+        window.localStorage.setItem(Component.AUTH_KEY, JSON.stringify(auth));
+      } catch (e2) {}
     }
-    const auth = {
-      username: acc.username,
-      nama: acc.nama,
-      role: acc.role,
-      wilayah: acc.wilayah
-    };
-    try {
-      window.localStorage.setItem(Component.AUTH_KEY, JSON.stringify(auth));
-    } catch (e2) {}
     this.setState({
       auth: auth,
       view: 'dashboard',
@@ -136,15 +202,63 @@ class Component extends React.Component {
       },
       toast: {
         type: 'ok',
-        msg: 'Selamat datang, ' + acc.nama + '.'
+        msg: 'Selamat datang, ' + auth.nama + '.'
       }
     });
     this.autoClear();
+  }
+  loginFail(msg) {
+    this.setState(s => ({
+      loginForm: Object.assign({}, s.loginForm, {
+        error: msg || 'Username atau kata sandi salah.'
+      })
+    }));
+  }
+  login(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    const f = this.state.loginForm;
+    const u = (f.username || '').trim().toLowerCase();
+    if (this.serverMode()) {
+      // Mode server: validasi & ambil data dari Google Sheets.
+      this._cred = {
+        username: u,
+        password: f.password
+      };
+      this.apiCall('login', {
+        username: u,
+        password: f.password
+      }).then(res => {
+        if (!res || !res.ok) {
+          this._cred = null;
+          this.loginFail(res && res.error);
+          return;
+        }
+        this.loginOk(res.user, false); // sesi server tidak dipersist (butuh login tiap sesi)
+        this.bootstrap();
+      }).catch(() => {
+        this._cred = null;
+        this.loginFail('Server tidak terjangkau. Periksa koneksi / URL.');
+      });
+      return;
+    }
+    // Mode lokal: akun demo bawaan.
+    const acc = this.ACCOUNTS.find(a => a.username === u && a.password === f.password);
+    if (!acc) {
+      this.loginFail();
+      return;
+    }
+    this.loginOk({
+      username: acc.username,
+      nama: acc.nama,
+      role: acc.role,
+      wilayah: acc.wilayah
+    }, true);
   }
   logout() {
     try {
       window.localStorage.removeItem(Component.AUTH_KEY);
     } catch (e) {}
+    this._cred = null;
     this.setState({
       auth: null,
       view: 'dashboard',
@@ -168,6 +282,7 @@ class Component extends React.Component {
       },
       view: 'dashboard',
       search: '',
+      filterDesa: 'semua',
       filterRt: 'semua',
       filterDesil: 'semua',
       filterBansos: 'semua',
@@ -215,6 +330,32 @@ class Component extends React.Component {
   }
   resetStore() {
     if (!this.canCrud()) return;
+    if (this.serverMode()) {
+      this.apiCall('reset', {}).then(res => {
+        if (res && res.ok) {
+          this.bootstrap();
+          this.setState({
+            view: 'dashboard',
+            toast: {
+              type: 'ok',
+              msg: 'Data contoh di server dipulihkan.'
+            }
+          });
+          this.autoClear();
+        } else {
+          this.push('reset', {});
+        }
+      }).catch(() => {
+        this.setState({
+          toast: {
+            type: 'err',
+            msg: 'Server tidak terjangkau.'
+          }
+        });
+        this.autoClear();
+      });
+      return;
+    }
     try {
       window.localStorage.removeItem(Component.STORE_KEY);
     } catch (e) {}
@@ -384,67 +525,379 @@ class Component extends React.Component {
       anggota: meta.anggota || []
     });
   }
+
+  // Data dummy: Kecamatan Tejakula, Kabupaten Buleleng — Desa Sambirenteng,
+  // Penuktukan, dan Tembok. SLS = banjar dinas. Dirancang menutup semua kasus:
+  // desil 1–10, semua status bansos, perubahan desil naik & turun, disabilitas,
+  // beragam kondisi rumah/pekerjaan, serta rumah tangga 1 & 2 snapshot.
   seedWarga() {
     const W = [];
-    W.push(this.mkWarga({
-      id: 'w1',
-      noKK: '3204150607080001',
-      nik: '3204151005780002',
-      nama: 'Slamet Riyadi',
-      dusun: 'Dusun Krajan',
+    const mk = (m, s) => W.push(this.mkWarga(m, s));
+
+    // === Desa Sambirenteng =================================================
+    mk({
+      id: 'w01',
+      noKK: '5108150101010001',
+      nik: '5108150101800001',
+      nama: 'I Wayan Sukra',
+      desa: 'Desa Sambirenteng',
+      dusun: 'Banjar Dinas Sambirenteng',
+      rt: '001',
+      rw: '001',
+      alamat: 'Jl. Air Sanih Gg. Melati',
+      anggota: ['I Wayan Sukra', 'Ni Ketut Rinjin', 'Kadek Adi']
+    }, [{
+      tanggal: '2026-06-15',
+      operator: 'Komang Sutarja',
+      pekerjaan: 'Buruh Tani',
+      pendidikan: 'Tidak Sekolah',
+      penghasilan: 600000,
+      jumlahAnggota: 3,
+      disabilitas: 'Tidak Ada',
+      statusRumah: 'Numpang',
+      lantai: 'Tanah',
+      dinding: 'Bambu/Kayu',
+      atap: 'Daun/Rumbia',
+      sumberAir: 'Sungai/Hujan',
+      penerangan: 'Non-PLN',
+      aset: [],
+      bansos: 'PKH + BPNT'
+    }]);
+    mk({
+      id: 'w02',
+      noKK: '5108150101010002',
+      nik: '5108154208650002',
+      nama: 'Ni Nengah Rauh',
+      desa: 'Desa Sambirenteng',
+      dusun: 'Banjar Dinas Sambirenteng',
       rt: '002',
       rw: '001',
-      alamat: 'Jl. Melati No. 12',
-      anggota: ['Slamet Riyadi', 'Wagiyem', 'Andi Saputra', 'Rina', 'Dewi']
+      alamat: 'Jl. Air Sanih No. 8',
+      anggota: ['Ni Nengah Rauh', 'I Gede Bagia']
     }, [{
       tanggal: '2025-09-10',
-      operator: 'Budi Santoso',
-      pekerjaan: 'Buruh Tani',
+      operator: 'Komang Sutarja',
+      pekerjaan: 'Buruh Harian',
       pendidikan: 'SD',
       penghasilan: 1500000,
-      jumlahAnggota: 5,
+      jumlahAnggota: 2,
       disabilitas: 'Tidak Ada',
       statusRumah: 'Milik Sendiri',
       lantai: 'Semen',
       dinding: 'Setengah Tembok',
+      atap: 'Seng/Asbes',
+      sumberAir: 'Sumur',
+      penerangan: 'PLN 450 VA',
+      aset: ['TV', 'Sepeda'],
+      bansos: 'PKH'
+    }, {
+      tanggal: '2026-06-15',
+      operator: 'Komang Sutarja',
+      pekerjaan: 'Tidak Bekerja',
+      pendidikan: 'SD',
+      penghasilan: 700000,
+      jumlahAnggota: 2,
+      disabilitas: 'Tidak Ada',
+      statusRumah: 'Milik Sendiri',
+      lantai: 'Semen',
+      dinding: 'Setengah Tembok',
+      atap: 'Seng/Asbes',
+      sumberAir: 'Sumur',
+      penerangan: 'PLN 450 VA',
+      aset: ['TV'],
+      bansos: 'PKH'
+    }]);
+    mk({
+      id: 'w03',
+      noKK: '5108150102010003',
+      nik: '5108150703700003',
+      nama: 'I Ketut Murta',
+      desa: 'Desa Sambirenteng',
+      dusun: 'Banjar Dinas Penyumbahan',
+      rt: '001',
+      rw: '002',
+      alamat: 'Br. Penyumbahan Kaja',
+      anggota: ['I Ketut Murta', 'Ni Wayan Sari', 'Putu Eka', 'Kadek Dwi']
+    }, [{
+      tanggal: '2026-06-16',
+      operator: 'Putu Ariani',
+      pekerjaan: 'Nelayan',
+      pendidikan: 'SD',
+      penghasilan: 1700000,
+      jumlahAnggota: 4,
+      disabilitas: 'Ada',
+      statusRumah: 'Milik Sendiri',
+      lantai: 'Semen',
+      dinding: 'Setengah Tembok',
+      atap: 'Seng/Asbes',
+      sumberAir: 'Sumur',
+      penerangan: 'PLN 450 VA',
+      aset: ['Perahu', 'Sepeda Motor'],
+      bansos: 'BPNT'
+    }]);
+    mk({
+      id: 'w04',
+      noKK: '5108150102010004',
+      nik: '5108151511780004',
+      nama: 'I Putu Gde Astawa',
+      desa: 'Desa Sambirenteng',
+      dusun: 'Banjar Dinas Penyumbahan',
+      rt: '002',
+      rw: '002',
+      alamat: 'Br. Penyumbahan Kelod',
+      anggota: ['I Putu Gde Astawa', 'Ni Made Asih', 'Gede Surya']
+    }, [{
+      tanggal: '2025-08-01',
+      operator: 'Putu Ariani',
+      pekerjaan: 'Pedagang',
+      pendidikan: 'SMP',
+      penghasilan: 2300000,
+      jumlahAnggota: 3,
+      disabilitas: 'Tidak Ada',
+      statusRumah: 'Milik Sendiri',
+      lantai: 'Semen',
+      dinding: 'Tembok',
       atap: 'Genteng/Beton',
       sumberAir: 'Sumur',
       penerangan: 'PLN 900+ VA',
       aset: ['Sepeda Motor', 'TV'],
-      bansos: 'PKH'
+      bansos: 'BPNT'
     }, {
-      tanggal: '2026-06-19',
-      operator: 'Budi Santoso',
-      pekerjaan: 'Tidak Bekerja',
+      tanggal: '2026-06-16',
+      operator: 'Putu Ariani',
+      pekerjaan: 'Wiraswasta',
+      pendidikan: 'SMP',
+      penghasilan: 4200000,
+      jumlahAnggota: 3,
+      disabilitas: 'Tidak Ada',
+      statusRumah: 'Milik Sendiri',
+      lantai: 'Keramik/Ubin',
+      dinding: 'Tembok',
+      atap: 'Genteng/Beton',
+      sumberAir: 'PDAM/Ledeng',
+      penerangan: 'PLN 900+ VA',
+      aset: ['Sepeda Motor', 'Mobil', 'Kulkas', 'TV'],
+      bansos: 'Tidak Ada'
+    }]);
+    mk({
+      id: 'w05',
+      noKK: '5108150103010005',
+      nik: '5108151009820005',
+      nama: 'I Gede Suardika',
+      desa: 'Desa Sambirenteng',
+      dusun: 'Banjar Dinas Bantes',
+      rt: '001',
+      rw: '003',
+      alamat: 'Br. Bantes',
+      anggota: ['I Gede Suardika', 'Ni Luh Putri', 'Komang Tri']
+    }, [{
+      tanggal: '2026-06-17',
+      operator: 'Komang Sutarja',
+      pekerjaan: 'PNS',
+      pendidikan: 'S1',
+      penghasilan: 6500000,
+      jumlahAnggota: 3,
+      disabilitas: 'Tidak Ada',
+      statusRumah: 'Milik Sendiri',
+      lantai: 'Keramik/Ubin',
+      dinding: 'Tembok',
+      atap: 'Genteng/Beton',
+      sumberAir: 'PDAM/Ledeng',
+      penerangan: 'PLN 900+ VA',
+      aset: ['Mobil', 'Sepeda Motor', 'Kulkas', 'TV', 'AC'],
+      bansos: 'Tidak Ada'
+    }]);
+    mk({
+      id: 'w06',
+      noKK: '5108150103010006',
+      nik: '5108154506880006',
+      nama: 'Ni Made Sari',
+      desa: 'Desa Sambirenteng',
+      dusun: 'Banjar Dinas Bantes',
+      rt: '002',
+      rw: '003',
+      alamat: 'Br. Bantes Gg. II',
+      anggota: ['Ni Made Sari', 'I Ketut Lanus', 'Putu Ayu']
+    }, [{
+      tanggal: '2026-06-17',
+      operator: 'Komang Sutarja',
+      pekerjaan: 'Buruh Tani',
       pendidikan: 'SD',
-      penghasilan: 800000,
-      jumlahAnggota: 5,
+      penghasilan: 1100000,
+      jumlahAnggota: 3,
+      disabilitas: 'Tidak Ada',
+      statusRumah: 'Milik Sendiri',
+      lantai: 'Semen',
+      dinding: 'Bambu/Kayu',
+      atap: 'Seng/Asbes',
+      sumberAir: 'Sumur',
+      penerangan: 'PLN 450 VA',
+      aset: ['TV'],
+      bansos: 'PKH'
+    }]);
+
+    // === Desa Penuktukan ===================================================
+    mk({
+      id: 'w07',
+      noKK: '5108150201010007',
+      nik: '5108150201750007',
+      nama: 'I Nyoman Reta',
+      desa: 'Desa Penuktukan',
+      dusun: 'Banjar Dinas Penuktukan',
+      rt: '001',
+      rw: '001',
+      alamat: 'Jl. Singaraja-Amlapura',
+      anggota: ['I Nyoman Reta', 'Ni Ketut Kerti', 'Wayan Sukasta', 'Made Sukasti']
+    }, [{
+      tanggal: '2026-06-18',
+      operator: 'Made Sukerta',
+      pekerjaan: 'Nelayan',
+      pendidikan: 'Tidak Sekolah',
+      penghasilan: 700000,
+      jumlahAnggota: 4,
+      disabilitas: 'Tidak Ada',
+      statusRumah: 'Numpang',
+      lantai: 'Tanah',
+      dinding: 'Bambu/Kayu',
+      atap: 'Daun/Rumbia',
+      sumberAir: 'Sungai/Hujan',
+      penerangan: 'PLN 450 VA',
+      aset: ['Perahu'],
+      bansos: 'PKH + BPNT'
+    }]);
+    mk({
+      id: 'w08',
+      noKK: '5108150201010008',
+      nik: '5108151203800008',
+      nama: 'I Kadek Yasa',
+      desa: 'Desa Penuktukan',
+      dusun: 'Banjar Dinas Penuktukan',
+      rt: '002',
+      rw: '001',
+      alamat: 'Jl. Pantai Penuktukan',
+      anggota: ['I Kadek Yasa', 'Ni Putu Eni', 'Gede Restu']
+    }, [{
+      tanggal: '2025-11-12',
+      operator: 'Made Sukerta',
+      pekerjaan: 'Tukang Bangunan',
+      pendidikan: 'SMP',
+      penghasilan: 2000000,
+      jumlahAnggota: 3,
       disabilitas: 'Tidak Ada',
       statusRumah: 'Milik Sendiri',
       lantai: 'Semen',
       dinding: 'Setengah Tembok',
+      atap: 'Seng/Asbes',
+      sumberAir: 'Sumur',
+      penerangan: 'PLN 900+ VA',
+      aset: ['Sepeda Motor'],
+      bansos: 'BPNT'
+    }, {
+      tanggal: '2026-06-18',
+      operator: 'Made Sukerta',
+      pekerjaan: 'Tukang Bangunan',
+      pendidikan: 'SMP',
+      penghasilan: 2400000,
+      jumlahAnggota: 3,
+      disabilitas: 'Tidak Ada',
+      statusRumah: 'Milik Sendiri',
+      lantai: 'Semen',
+      dinding: 'Tembok',
       atap: 'Genteng/Beton',
       sumberAir: 'Sumur',
       penerangan: 'PLN 900+ VA',
-      aset: ['TV'],
-      bansos: 'PKH'
-    }]));
-    W.push(this.mkWarga({
-      id: 'w2',
-      noKK: '3204150607080002',
-      nik: '3204154208600003',
-      nama: 'Sukinem',
-      dusun: 'Dusun Ngasem',
+      aset: ['Sepeda Motor', 'TV'],
+      bansos: 'BPNT'
+    }]);
+    mk({
+      id: 'w09',
+      noKK: '5108150202010009',
+      nik: '5108151807790009',
+      nama: 'I Gede Parwata',
+      desa: 'Desa Penuktukan',
+      dusun: 'Banjar Dinas Kanginan',
       rt: '001',
-      rw: '001',
-      alamat: 'Jl. Mawar No. 4',
-      anggota: ['Sukinem', 'Bagas Setiawan']
+      rw: '002',
+      alamat: 'Br. Kanginan',
+      anggota: ['I Gede Parwata', 'Ni Nengah Wari', 'Kadek Sania', 'Komang Tris']
     }, [{
-      tanggal: '2025-08-05',
-      operator: 'Siti Aminah',
-      pekerjaan: 'Tidak Bekerja',
+      tanggal: '2026-06-19',
+      operator: 'Putu Ariani',
+      pekerjaan: 'Pedagang',
+      pendidikan: 'SMA',
+      penghasilan: 2700000,
+      jumlahAnggota: 4,
+      disabilitas: 'Tidak Ada',
+      statusRumah: 'Milik Sendiri',
+      lantai: 'Semen',
+      dinding: 'Setengah Tembok',
+      atap: 'Seng/Asbes',
+      sumberAir: 'Sumur',
+      penerangan: 'PLN 450 VA',
+      aset: ['Sepeda Motor'],
+      bansos: 'Tidak Ada'
+    }]);
+    mk({
+      id: 'w10',
+      noKK: '5108150202010010',
+      nik: '5108152208770010',
+      nama: 'I Putu Mertayasa',
+      desa: 'Desa Penuktukan',
+      dusun: 'Banjar Dinas Kanginan',
+      rt: '002',
+      rw: '002',
+      alamat: 'Br. Kanginan Gg. III',
+      anggota: ['I Putu Mertayasa', 'Ni Wayan Rai', 'Gede Adnyana']
+    }, [{
+      tanggal: '2025-07-05',
+      operator: 'Putu Ariani',
+      pekerjaan: 'Sopir',
+      pendidikan: 'SMA',
+      penghasilan: 2600000,
+      jumlahAnggota: 3,
+      disabilitas: 'Tidak Ada',
+      statusRumah: 'Milik Sendiri',
+      lantai: 'Semen',
+      dinding: 'Tembok',
+      atap: 'Genteng/Beton',
+      sumberAir: 'Sumur',
+      penerangan: 'PLN 900+ VA',
+      aset: ['Sepeda Motor', 'TV'],
+      bansos: 'BPNT'
+    }, {
+      tanggal: '2026-06-19',
+      operator: 'Putu Ariani',
+      pekerjaan: 'Wiraswasta',
+      pendidikan: 'SMA',
+      penghasilan: 5000000,
+      jumlahAnggota: 3,
+      disabilitas: 'Tidak Ada',
+      statusRumah: 'Milik Sendiri',
+      lantai: 'Keramik/Ubin',
+      dinding: 'Tembok',
+      atap: 'Genteng/Beton',
+      sumberAir: 'PDAM/Ledeng',
+      penerangan: 'PLN 900+ VA',
+      aset: ['Mobil', 'Sepeda Motor', 'Kulkas', 'TV', 'AC'],
+      bansos: 'Tidak Ada'
+    }]);
+    mk({
+      id: 'w11',
+      noKK: '5108150203010011',
+      nik: '5108154811900011',
+      nama: 'Ni Luh Sukerti',
+      desa: 'Desa Penuktukan',
+      dusun: 'Banjar Dinas Kawanan',
+      rt: '001',
+      rw: '003',
+      alamat: 'Br. Kawanan',
+      anggota: ['Ni Luh Sukerti', 'I Wayan Tama']
+    }, [{
+      tanggal: '2026-06-19',
+      operator: 'Made Sukerta',
+      pekerjaan: 'Buruh Tani',
       pendidikan: 'SD',
-      penghasilan: 600000,
+      penghasilan: 850000,
       jumlahAnggota: 2,
       disabilitas: 'Tidak Ada',
       statusRumah: 'Numpang',
@@ -454,40 +907,25 @@ class Component extends React.Component {
       sumberAir: 'Sumur',
       penerangan: 'PLN 450 VA',
       aset: [],
-      bansos: 'PKH + BPNT'
-    }, {
-      tanggal: '2026-03-12',
-      operator: 'Siti Aminah',
-      pekerjaan: 'Tidak Bekerja',
-      pendidikan: 'SD',
-      penghasilan: 700000,
-      jumlahAnggota: 2,
-      disabilitas: 'Tidak Ada',
-      statusRumah: 'Numpang',
-      lantai: 'Semen',
-      dinding: 'Bambu/Kayu',
-      atap: 'Seng/Asbes',
-      sumberAir: 'Sumur',
-      penerangan: 'PLN 450 VA',
-      aset: [],
-      bansos: 'PKH + BPNT'
-    }]));
-    W.push(this.mkWarga({
-      id: 'w3',
-      noKK: '3204150607080003',
-      nik: '3204150803750004',
-      nama: 'Bambang Wijaya',
-      dusun: 'Dusun Krajan',
-      rt: '003',
-      rw: '002',
-      alamat: 'Jl. Anggrek No. 21',
-      anggota: ['Bambang Wijaya', 'Lestari', 'Putri Maharani', 'Galih']
+      bansos: 'PKH'
+    }]);
+    mk({
+      id: 'w12',
+      noKK: '5108150203010012',
+      nik: '5108150512720012',
+      nama: 'I Komang Wirawan',
+      desa: 'Desa Penuktukan',
+      dusun: 'Banjar Dinas Kawanan',
+      rt: '002',
+      rw: '003',
+      alamat: 'Br. Kawanan No. 1',
+      anggota: ['I Komang Wirawan', 'Ni Kadek Mertini', 'Gede Bagus', 'Putu Indah']
     }, [{
-      tanggal: '2025-07-20',
-      operator: 'Budi Santoso',
-      pekerjaan: 'Pedagang',
-      pendidikan: 'SMP',
-      penghasilan: 2500000,
+      tanggal: '2026-06-19',
+      operator: 'Putu Ariani',
+      pekerjaan: 'PNS',
+      pendidikan: 'S1',
+      penghasilan: 8500000,
       jumlahAnggota: 4,
       disabilitas: 'Tidak Ada',
       statusRumah: 'Milik Sendiri',
@@ -496,13 +934,127 @@ class Component extends React.Component {
       atap: 'Genteng/Beton',
       sumberAir: 'PDAM/Ledeng',
       penerangan: 'PLN 900+ VA',
-      aset: ['Sepeda Motor', 'Kulkas', 'TV'],
+      aset: ['Mobil', 'Sepeda Motor', 'Kulkas', 'TV', 'AC'],
       bansos: 'Tidak Ada'
-    }, {
-      tanggal: '2026-02-18',
-      operator: 'Budi Santoso',
-      pekerjaan: 'Wiraswasta',
+    }]);
+
+    // === Desa Tembok =======================================================
+    mk({
+      id: 'w13',
+      noKK: '5108150301010013',
+      nik: '5108150301680013',
+      nama: 'I Wayan Repot',
+      desa: 'Desa Tembok',
+      dusun: 'Banjar Dinas Tembok',
+      rt: '001',
+      rw: '001',
+      alamat: 'Jl. Tembok-Tejakula',
+      anggota: ['I Wayan Repot', 'Ni Ketut Sari']
+    }, [{
+      tanggal: '2026-06-20',
+      operator: 'Komang Sutarja',
+      pekerjaan: 'Buruh Tani',
+      pendidikan: 'Tidak Sekolah',
+      penghasilan: 650000,
+      jumlahAnggota: 2,
+      disabilitas: 'Ada',
+      statusRumah: 'Numpang',
+      lantai: 'Tanah',
+      dinding: 'Bambu/Kayu',
+      atap: 'Daun/Rumbia',
+      sumberAir: 'Sungai/Hujan',
+      penerangan: 'PLN 450 VA',
+      aset: [],
+      bansos: 'PKH'
+    }]);
+    mk({
+      id: 'w14',
+      noKK: '5108150301010014',
+      nik: '5108151404810014',
+      nama: 'I Nengah Kerti',
+      desa: 'Desa Tembok',
+      dusun: 'Banjar Dinas Tembok',
+      rt: '002',
+      rw: '001',
+      alamat: 'Jl. Tembok No. 22',
+      anggota: ['I Nengah Kerti', 'Ni Wayan Sukern', 'Kadek Riska']
+    }, [{
+      tanggal: '2025-10-10',
+      operator: 'Made Sukerta',
+      pekerjaan: 'Pengrajin',
       pendidikan: 'SMP',
+      penghasilan: 1900000,
+      jumlahAnggota: 3,
+      disabilitas: 'Tidak Ada',
+      statusRumah: 'Milik Sendiri',
+      lantai: 'Semen',
+      dinding: 'Setengah Tembok',
+      atap: 'Genteng/Beton',
+      sumberAir: 'Sumur',
+      penerangan: 'PLN 900+ VA',
+      aset: ['Sepeda Motor', 'TV'],
+      bansos: 'BPNT'
+    }, {
+      tanggal: '2026-06-20',
+      operator: 'Made Sukerta',
+      pekerjaan: 'Buruh Harian',
+      pendidikan: 'SMP',
+      penghasilan: 1200000,
+      jumlahAnggota: 3,
+      disabilitas: 'Tidak Ada',
+      statusRumah: 'Milik Sendiri',
+      lantai: 'Semen',
+      dinding: 'Setengah Tembok',
+      atap: 'Seng/Asbes',
+      sumberAir: 'Sumur',
+      penerangan: 'PLN 450 VA',
+      aset: ['TV'],
+      bansos: 'BPNT'
+    }]);
+    mk({
+      id: 'w15',
+      noKK: '5108150302010015',
+      nik: '5108154909860015',
+      nama: 'Ni Ketut Lasia',
+      desa: 'Desa Tembok',
+      dusun: 'Banjar Dinas Dukuh',
+      rt: '001',
+      rw: '002',
+      alamat: 'Br. Dukuh',
+      anggota: ['Ni Ketut Lasia', 'I Gede Mara', 'Putu Sentana']
+    }, [{
+      tanggal: '2026-06-20',
+      operator: 'Putu Ariani',
+      pekerjaan: 'Tidak Bekerja',
+      pendidikan: 'SD',
+      penghasilan: 500000,
+      jumlahAnggota: 3,
+      disabilitas: 'Tidak Ada',
+      statusRumah: 'Numpang',
+      lantai: 'Tanah',
+      dinding: 'Bambu/Kayu',
+      atap: 'Seng/Asbes',
+      sumberAir: 'Sumur',
+      penerangan: 'PLN 450 VA',
+      aset: [],
+      bansos: 'PKH + BPNT'
+    }]);
+    mk({
+      id: 'w16',
+      noKK: '5108150302010016',
+      nik: '5108152610830016',
+      nama: 'I Made Suarjana',
+      desa: 'Desa Tembok',
+      dusun: 'Banjar Dinas Dukuh',
+      rt: '002',
+      rw: '002',
+      alamat: 'Br. Dukuh Kaja',
+      anggota: ['I Made Suarjana', 'Ni Luh Armini', 'Gede Pasek', 'Kadek Lina']
+    }, [{
+      tanggal: '2026-06-21',
+      operator: 'Putu Ariani',
+      pekerjaan: 'Wiraswasta',
+      pendidikan: 'SMA',
       penghasilan: 4500000,
       jumlahAnggota: 4,
       disabilitas: 'Tidak Ada',
@@ -512,52 +1064,26 @@ class Component extends React.Component {
       atap: 'Genteng/Beton',
       sumberAir: 'PDAM/Ledeng',
       penerangan: 'PLN 900+ VA',
-      aset: ['Sepeda Motor', 'Mobil', 'Kulkas', 'TV', 'AC'],
+      aset: ['Mobil', 'Sepeda Motor', 'Kulkas', 'TV'],
       bansos: 'Tidak Ada'
-    }]));
-    W.push(this.mkWarga({
-      id: 'w4',
-      noKK: '3204150607080004',
-      nik: '3204152107700005',
-      nama: 'Tukijan',
-      dusun: 'Dusun Ngasem',
-      rt: '002',
-      rw: '001',
-      alamat: 'Jl. Kenanga No. 7',
-      anggota: ['Tukijan', 'Sumarni', 'Adi Nugroho', 'Nia']
-    }, [{
-      tanggal: '2026-06-19',
-      operator: 'Budi Santoso',
-      pekerjaan: 'Petani',
-      pendidikan: 'SD',
-      penghasilan: 1800000,
-      jumlahAnggota: 4,
-      disabilitas: 'Tidak Ada',
-      statusRumah: 'Milik Sendiri',
-      lantai: 'Semen',
-      dinding: 'Tembok',
-      atap: 'Genteng/Beton',
-      sumberAir: 'Sumur',
-      penerangan: 'PLN 900+ VA',
-      aset: ['Sepeda Motor', 'Ternak'],
-      bansos: 'BPNT'
-    }]));
-    W.push(this.mkWarga({
-      id: 'w5',
-      noKK: '3204150607080005',
-      nik: '3204156504880006',
-      nama: 'Sri Wahyuni',
-      dusun: 'Dusun Sukamulya',
+    }]);
+    mk({
+      id: 'w17',
+      noKK: '5108150303010017',
+      nik: '5108151712880017',
+      nama: 'I Putu Adi',
+      desa: 'Desa Tembok',
+      dusun: 'Banjar Dinas Ngis',
       rt: '001',
       rw: '003',
-      alamat: 'Jl. Dahlia No. 3',
-      anggota: ['Sri Wahyuni', 'Hendra', 'Kiki Amelia']
+      alamat: 'Br. Ngis',
+      anggota: ['I Putu Adi', 'Ni Made Yuni', 'Komang Bayu']
     }, [{
-      tanggal: '2026-06-19',
-      operator: 'Siti Aminah',
+      tanggal: '2026-06-21',
+      operator: 'Komang Sutarja',
       pekerjaan: 'Guru Honorer',
       pendidikan: 'S1',
-      penghasilan: 2200000,
+      penghasilan: 2300000,
       jumlahAnggota: 3,
       disabilitas: 'Tidak Ada',
       statusRumah: 'Sewa/Kontrak',
@@ -568,143 +1094,122 @@ class Component extends React.Component {
       penerangan: 'PLN 900+ VA',
       aset: ['Sepeda Motor', 'Kulkas', 'TV'],
       bansos: 'Tidak Ada'
-    }]));
-    W.push(this.mkWarga({
-      id: 'w6',
-      noKK: '3204150607080006',
-      nik: '3204155512650007',
-      nama: 'Painem',
-      dusun: 'Dusun Ngasem',
-      rt: '003',
-      rw: '001',
-      alamat: 'Jl. Flamboyan No. 9',
-      anggota: ['Painem', 'Joko', 'Sari']
-    }, [{
-      tanggal: '2026-06-19',
-      operator: 'Siti Aminah',
-      pekerjaan: 'Buruh Harian',
-      pendidikan: 'Tidak Sekolah',
-      penghasilan: 900000,
-      jumlahAnggota: 3,
-      disabilitas: 'Ada',
-      statusRumah: 'Numpang',
-      lantai: 'Tanah',
-      dinding: 'Bambu/Kayu',
-      atap: 'Seng/Asbes',
-      sumberAir: 'Sungai/Hujan',
-      penerangan: 'PLN 450 VA',
-      aset: [],
-      bansos: 'PKH'
-    }]));
-    W.push(this.mkWarga({
-      id: 'w7',
-      noKK: '3204150607080007',
-      nik: '3204151809820008',
-      nama: 'Wagiyo',
-      dusun: 'Dusun Krajan',
+    }]);
+    mk({
+      id: 'w18',
+      noKK: '5108150303010018',
+      nik: '5108150208730018',
+      nama: 'I Gede Mangku',
+      desa: 'Desa Tembok',
+      dusun: 'Banjar Dinas Ngis',
       rt: '002',
-      rw: '002',
-      alamat: 'Jl. Melati No. 30',
-      anggota: ['Wagiyo', 'Tini', 'Bayu', 'Dika', 'Eka']
+      rw: '003',
+      alamat: 'Br. Ngis Kelod',
+      anggota: ['I Gede Mangku', 'Ni Ketut Warti', 'Putu Gunawan', 'Made Lestari', 'Kadek Ari']
     }, [{
-      tanggal: '2026-06-19',
-      operator: 'Budi Santoso',
-      pekerjaan: 'Tukang Bangunan',
-      pendidikan: 'SMP',
-      penghasilan: 2000000,
+      tanggal: '2025-06-12',
+      operator: 'Made Sukerta',
+      pekerjaan: 'Petani',
+      pendidikan: 'SMA',
+      penghasilan: 3000000,
       jumlahAnggota: 5,
       disabilitas: 'Tidak Ada',
       statusRumah: 'Milik Sendiri',
       lantai: 'Semen',
-      dinding: 'Setengah Tembok',
-      atap: 'Seng/Asbes',
-      sumberAir: 'Sumur',
-      penerangan: 'PLN 900+ VA',
-      aset: ['Sepeda Motor'],
-      bansos: 'BPNT'
-    }]));
-    W.push(this.mkWarga({
-      id: 'w8',
-      noKK: '3204150607080008',
-      nik: '3204156011790009',
-      nama: 'Ngatini',
-      dusun: 'Dusun Sukamulya',
-      rt: '002',
-      rw: '003',
-      alamat: 'Jl. Dahlia No. 15',
-      anggota: ['Ngatini', 'Parto', 'Wati', 'Sinta']
-    }, [{
-      tanggal: '2025-10-02',
-      operator: 'Siti Aminah',
-      pekerjaan: 'Pengrajin',
-      pendidikan: 'SD',
-      penghasilan: 1200000,
-      jumlahAnggota: 4,
-      disabilitas: 'Tidak Ada',
-      statusRumah: 'Milik Sendiri',
-      lantai: 'Semen',
-      dinding: 'Setengah Tembok',
+      dinding: 'Tembok',
       atap: 'Genteng/Beton',
       sumberAir: 'Sumur',
-      penerangan: 'PLN 450 VA',
-      aset: ['TV'],
-      bansos: 'PKH'
+      penerangan: 'PLN 900+ VA',
+      aset: ['Sepeda Motor', 'Ternak', 'TV'],
+      bansos: 'Tidak Ada'
     }, {
-      tanggal: '2026-05-30',
-      operator: 'Siti Aminah',
-      pekerjaan: 'Pengrajin',
-      pendidikan: 'SD',
-      penghasilan: 1600000,
-      jumlahAnggota: 4,
+      tanggal: '2026-06-21',
+      operator: 'Made Sukerta',
+      pekerjaan: 'Wiraswasta',
+      pendidikan: 'SMA',
+      penghasilan: 5500000,
+      jumlahAnggota: 5,
       disabilitas: 'Tidak Ada',
       statusRumah: 'Milik Sendiri',
-      lantai: 'Semen',
-      dinding: 'Setengah Tembok',
+      lantai: 'Keramik/Ubin',
+      dinding: 'Tembok',
       atap: 'Genteng/Beton',
-      sumberAir: 'Sumur',
+      sumberAir: 'PDAM/Ledeng',
       penerangan: 'PLN 900+ VA',
-      aset: ['TV', 'Kulkas'],
-      bansos: 'PKH'
-    }]));
+      aset: ['Mobil', 'Sepeda Motor', 'Ternak', 'Kulkas', 'TV', 'AC'],
+      bansos: 'Tidak Ada'
+    }]);
     return W;
   }
   seedSanggahan() {
-    return [{
+    return [
+    // Diajukan — menunggu diproses
+    {
       id: 's1',
-      wargaId: 'w1',
-      tanggalSnapshot: '2026-06-19',
-      pengaju: 'Slamet Riyadi',
-      nik: '3204151005780002',
+      wargaId: 'w02',
+      tanggalSnapshot: '2026-06-15',
+      pengaju: 'Ni Nengah Rauh',
+      nik: '5108154208650002',
       hubungan: 'Warga Bersangkutan',
-      alasan: 'Data pekerjaan saya tercatat "Tidak Bekerja" namun saya masih aktif bekerja sebagai tenaga serabutan. Mohon diperbaiki agar desil tidak berubah dan saya tetap berhak mendapat PKH.',
+      alasan: 'Saya memang sudah tidak bekerja tetap, namun masih menerima kiriman dari anak. Mohon ditinjau agar status PKH tetap sesuai kondisi sebenarnya.',
       status: 'Diajukan',
-      tanggalPengajuan: '2026-06-19',
+      tanggalPengajuan: '2026-06-16',
       tanggalSelesai: '',
       catatanOperator: ''
     }, {
       id: 's2',
-      wargaId: 'w2',
-      tanggalSnapshot: '2026-03-12',
-      pengaju: 'Ketua RT 001 / RW 001',
+      wargaId: 'w13',
+      tanggalSnapshot: '2026-06-20',
+      pengaju: 'Kelian Banjar Dinas Tembok',
       nik: '-',
       hubungan: 'RT/RW',
-      alasan: 'Kondisi lantai rumah Ibu Sukinem belum sepenuhnya berubah menjadi semen. Sebagian ruang masih berlantai tanah. Perlu dilakukan verifikasi lapangan ulang sebelum data dikunci.',
-      status: 'Diproses',
-      tanggalPengajuan: '2026-04-02',
+      alasan: 'Pak I Wayan Repot menyandang disabilitas dan tinggal menumpang. Mohon diprioritaskan untuk bantuan tambahan selain PKH.',
+      status: 'Diajukan',
+      tanggalPengajuan: '2026-06-21',
       tanggalSelesai: '',
       catatanOperator: ''
-    }, {
+    },
+    // Diproses
+    {
       id: 's3',
-      wargaId: 'w3',
-      tanggalSnapshot: '2026-02-18',
-      pengaju: 'Bambang Wijaya',
-      nik: '3204150803750004',
+      wargaId: 'w04',
+      tanggalSnapshot: '2026-06-16',
+      pengaju: 'I Putu Gde Astawa',
+      nik: '5108151511780004',
       hubungan: 'Warga Bersangkutan',
-      alasan: 'Aset mobil yang tercatat adalah kendaraan pinjaman milik saudara, bukan milik keluarga saya. Mohon dihapus dari daftar aset agar desil saya tidak naik ke angka yang tidak akurat.',
+      alasan: 'Penghasilan usaha saya tercatat naik, namun tahun ini sebenarnya menurun karena sepi pembeli. Mohon verifikasi ulang sebelum status bansos dicabut.',
+      status: 'Diproses',
+      tanggalPengajuan: '2026-06-18',
+      tanggalSelesai: '',
+      catatanOperator: ''
+    },
+    // Diterima
+    {
+      id: 's4',
+      wargaId: 'w08',
+      tanggalSnapshot: '2026-06-18',
+      pengaju: 'I Kadek Yasa',
+      nik: '5108151203800008',
+      hubungan: 'Warga Bersangkutan',
+      alasan: 'Atap rumah sudah diganti genteng dari hasil bantuan, namun kondisi ekonomi belum membaik. Mohon BPNT tetap dipertahankan.',
+      status: 'Diterima',
+      tanggalPengajuan: '2026-06-19',
+      tanggalSelesai: '2026-06-22',
+      catatanOperator: 'Hasil verifikasi lapangan menunjukkan kondisi ekonomi keluarga masih layak menerima BPNT. Sanggahan diterima dan status bansos dipertahankan.'
+    },
+    // Ditolak
+    {
+      id: 's5',
+      wargaId: 'w10',
+      tanggalSnapshot: '2026-06-19',
+      pengaju: 'I Putu Mertayasa',
+      nik: '5108152208770010',
+      hubungan: 'Warga Bersangkutan',
+      alasan: 'Mobil yang tercatat adalah kendaraan operasional pinjaman, bukan milik pribadi. Mohon dikeluarkan dari aset agar desil tidak naik.',
       status: 'Ditolak',
-      tanggalPengajuan: '2026-02-25',
-      tanggalSelesai: '2026-03-05',
-      catatanOperator: 'Telah dilakukan verifikasi lapangan dan pengecekan STNK. Kendaraan terdaftar atas nama Bambang Wijaya. Sanggahan ditolak sesuai hasil verifikasi dokumen.'
+      tanggalPengajuan: '2026-06-20',
+      tanggalSelesai: '2026-06-22',
+      catatanOperator: 'Pengecekan STNK menunjukkan kendaraan atas nama yang bersangkutan. Sanggahan ditolak sesuai bukti dokumen.'
     }];
   }
   blankForm() {
@@ -714,7 +1219,8 @@ class Component extends React.Component {
       noKK: '',
       nik: '',
       nama: '',
-      dusun: 'Dusun Krajan',
+      desa: 'Desa Sambirenteng',
+      dusun: 'Banjar Dinas Sambirenteng',
       rt: '',
       rw: '',
       alamat: '',
@@ -744,6 +1250,7 @@ class Component extends React.Component {
       noKK: w.noKK,
       nik: w.nik,
       nama: w.nama,
+      desa: w.desa || 'Desa Sambirenteng',
       dusun: w.dusun,
       rt: w.rt,
       rw: w.rw,
@@ -967,6 +1474,7 @@ class Component extends React.Component {
       noKK: f.noKK,
       nik: f.nik,
       nama: f.nama,
+      desa: f.desa,
       dusun: f.dusun,
       rt: f.rt,
       rw: f.rw,
@@ -1022,6 +1530,11 @@ class Component extends React.Component {
           msg: msg
         }
       };
+    }, () => {
+      const w = this.state.warga.find(x => x.id === f.id);
+      if (w) this.push('saveWarga', {
+        warga: w
+      });
     });
     this.autoClear();
   }
@@ -1091,6 +1604,9 @@ class Component extends React.Component {
         msg: 'Sanggahan berhasil diajukan dan masuk antrean proses.'
       }
     }));
+    this.push('submitSanggahan', {
+      sanggahan: newSg
+    });
     this.autoClear();
   }
   updateStatus(id, status) {
@@ -1100,6 +1616,10 @@ class Component extends React.Component {
         status: status
       }) : x)
     }));
+    this.push('updateSanggahan', {
+      id: id,
+      status: status
+    });
   }
   mulaiProses(id) {
     if (!this.canCrud()) return;
@@ -1110,6 +1630,7 @@ class Component extends React.Component {
   }
   selesaikanSanggahan(id, status, catatan) {
     if (!this.canCrud()) return;
+    const tgl = this.state.today;
     this.setState(s => ({
       sanggahan: s.sanggahan.map(x => x.id === id ? Object.assign({}, x, {
         status: status,
@@ -1119,12 +1640,18 @@ class Component extends React.Component {
       processingId: null,
       processCatatan: ''
     }));
+    this.push('updateSanggahan', {
+      id: id,
+      status: status,
+      catatanOperator: catatan,
+      tanggalSelesai: tgl
+    });
   }
   renderVals() {
     const st = this.state;
     const auth = st.auth;
     const canCrud = this.canCrud();
-    const namaDesa = this.props.namaDesa || 'Desa Sukamaju';
+    const namaDesa = this.props.namaDesa || 'Kec. Tejakula, Buleleng';
     const namaOperator = this.opName();
     const opInitials = namaOperator.split(' ').slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
     // Lingkup data: Kepala SLS hanya melihat warga & sanggahan di wilayahnya.
@@ -1155,6 +1682,7 @@ class Component extends React.Component {
     const q = st.search.trim().toLowerCase();
     let list = vWarga.filter(w => {
       if (q && (w.nama + ' ' + w.nik + ' ' + w.noKK).toLowerCase().indexOf(q) < 0) return false;
+      if (st.filterDesa !== 'semua' && w.desa !== st.filterDesa) return false;
       if (st.filterRt !== 'semua' && 'RT ' + w.rt + ' / RW ' + w.rw !== st.filterRt) return false;
       if (st.filterDesil !== 'semua') {
         if (st.filterDesil === 'prioritas') {
@@ -1175,6 +1703,7 @@ class Component extends React.Component {
         nik: 'NIK ' + w.nik,
         rtRw: 'RT ' + w.rt + ' / RW ' + w.rw,
         dusun: w.dusun,
+        desa: w.desa || '',
         pekerjaan: w.pekerjaan,
         penghasilan: this.rupiah(w.penghasilan) + ' /bln',
         desilLabel: 'Desil ' + w.desil,
@@ -1194,6 +1723,18 @@ class Component extends React.Component {
         }
       };
     });
+    const desaSet = [];
+    vWarga.forEach(w => {
+      if (w.desa && desaSet.indexOf(w.desa) < 0) desaSet.push(w.desa);
+    });
+    desaSet.sort();
+    const desaOptions = [{
+      value: 'semua',
+      label: 'Semua Desa'
+    }].concat(desaSet.map(v => ({
+      value: v,
+      label: v
+    })));
     const rtSet = [];
     vWarga.forEach(w => {
       const v = 'RT ' + w.rt + ' / RW ' + w.rw;
@@ -1347,7 +1888,7 @@ class Component extends React.Component {
         nama: rw.nama,
         nik: 'NIK ' + rw.nik,
         noKK: 'No. KK ' + rw.noKK,
-        rtRw: 'RT ' + rw.rt + ' / RW ' + rw.rw + ' · ' + rw.dusun,
+        rtRw: 'RT ' + rw.rt + ' / RW ' + rw.rw + ' · ' + rw.dusun + (rw.desa ? ' · ' + rw.desa : ''),
         desilLabel: 'Desil ' + rw.desil,
         desilStyle: 'display:inline-flex;align-items:center;padding:6px 13px;border-radius:20px;font-size:13px;font-weight:700;color:' + ds.text + ';background:' + ds.bg + ';',
         bansosStyle: 'display:inline-flex;align-items:center;padding:6px 13px;border-radius:20px;font-size:13px;font-weight:600;color:' + bs.text + ';background:' + bs.bg + ';',
@@ -1483,6 +2024,7 @@ class Component extends React.Component {
       canCrud: canCrud,
       roleLabel: auth ? auth.role : '',
       wilayahLabel: auth && auth.wilayah ? auth.wilayah : '',
+      serverMode: this.serverMode(),
       namaDesa: namaDesa,
       namaOperator: namaOperator,
       opInitials: opInitials,
@@ -1495,6 +2037,7 @@ class Component extends React.Component {
       isRiwayat: st.view === 'riwayat',
       isSanggahan: st.view === 'sanggahan',
       search: st.search,
+      filterDesa: st.filterDesa,
       filterRt: st.filterRt,
       filterDesil: st.filterDesil,
       filterBansos: st.filterBansos,
@@ -1502,6 +2045,7 @@ class Component extends React.Component {
       onSearch: e => this.onSearch(e),
       onFilter: e => this.onFilter(e),
       onTambah: () => this.onTambah(),
+      desaOptions: desaOptions,
       rtOptions: rtOptions,
       desilFilterOpts: desilFilterOpts,
       bansosFilterOpts: bansosFilterOpts,
@@ -1596,9 +2140,9 @@ class Component extends React.Component {
       note: 'CRUD penuh'
     }, {
       r: 'Kepala SLS',
-      u: 'sls.krajan',
+      u: 'sls.tembok',
       p: 'sls123',
-      note: 'Hanya-lihat · Dusun Krajan'
+      note: 'Hanya-lihat · B.D. Tembok'
     }];
     return /*#__PURE__*/React.createElement("div", {
       style: css("min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; background:#f5f5f2; font-family:'Plus Jakarta Sans',system-ui,sans-serif; color:#18191f;")
@@ -1697,7 +2241,10 @@ class Component extends React.Component {
       style: css('font-size:11px; color:#9ba2b6; font-weight:500; line-height:1.2;')
     }, V.namaDesa))), /*#__PURE__*/React.createElement("div", {
       style: css('display:flex; align-items:center; gap:10px; flex:none;')
-    }, !V.canCrud && /*#__PURE__*/React.createElement("span", {
+    }, /*#__PURE__*/React.createElement("span", {
+      title: V.serverMode ? 'Tersambung ke Google Sheets' : 'Data tersimpan di perangkat ini',
+      style: css('font-size:11px; font-weight:700; padding:5px 10px; border-radius:20px; white-space:nowrap; border:1px solid ' + (V.serverMode ? '#bbf7d0' : '#e0e0de') + '; color:' + (V.serverMode ? '#166534' : '#6b7280') + '; background:' + (V.serverMode ? '#f0fdf4' : '#f6f6f5') + ';')
+    }, V.serverMode ? '● Sheets' : '○ Lokal'), !V.canCrud && /*#__PURE__*/React.createElement("span", {
       style: css('font-size:11px; font-weight:700; color:#52576b; background:#f0f0ef; border:1px solid #e0e0de; padding:5px 10px; border-radius:20px; white-space:nowrap;')
     }, "Hanya-Lihat"), V.canCrud && /*#__PURE__*/React.createElement("button", {
       onClick: () => {
@@ -1819,6 +2366,14 @@ class Component extends React.Component {
       placeholder: "Cari NIK, Nama, atau No. KK…",
       style: css('flex:1; min-width:220px; padding:10px 14px; border:1.5px solid #e0e0de; border-radius:9px; font-family:inherit; font-size:13.5px; background:#fafaf9; color:#18191f;')
     }), /*#__PURE__*/React.createElement("select", {
+      value: V.filterDesa,
+      "data-filter": "filterDesa",
+      onChange: V.onFilter,
+      style: css('padding:10px 12px; border:1.5px solid #e0e0de; border-radius:9px; font-family:inherit; font-size:13px; background:#fafaf9; color:#18191f; cursor:pointer;')
+    }, V.desaOptions.map((opt, i) => /*#__PURE__*/React.createElement("option", {
+      key: i,
+      value: opt.value
+    }, opt.label))), /*#__PURE__*/React.createElement("select", {
       value: V.filterRt,
       "data-filter": "filterRt",
       onChange: V.onFilter,
@@ -1882,7 +2437,9 @@ class Component extends React.Component {
       style: css('font-size:13px; font-weight:600; color:#3d4152;')
     }, w.rtRw), /*#__PURE__*/React.createElement("div", {
       style: css('font-size:11px; color:#9ba2b6; margin-top:2px;')
-    }, w.dusun)), /*#__PURE__*/React.createElement("td", {
+    }, w.dusun), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:11px; color:#9ba2b6; margin-top:1px;')
+    }, w.desa)), /*#__PURE__*/React.createElement("td", {
       style: css('padding:13px 16px; vertical-align:middle;')
     }, /*#__PURE__*/React.createElement("div", {
       style: css('font-size:13px; font-weight:600; color:#3d4152;')
@@ -1955,12 +2512,20 @@ class Component extends React.Component {
       style: css(inp)
     })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
       style: css(lab)
-    }, "Dusun"), /*#__PURE__*/React.createElement("select", {
+    }, "Desa"), /*#__PURE__*/React.createElement("select", {
+      "data-field": "desa",
+      value: V.form.desa,
+      onChange: V.onFormChange,
+      style: css(inpSel)
+    }, /*#__PURE__*/React.createElement("option", null, "Desa Sambirenteng"), /*#__PURE__*/React.createElement("option", null, "Desa Penuktukan"), /*#__PURE__*/React.createElement("option", null, "Desa Tembok"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Banjar Dinas / Dusun"), /*#__PURE__*/React.createElement("input", {
       "data-field": "dusun",
       value: V.form.dusun,
       onChange: V.onFormChange,
-      style: css(inpSel)
-    }, /*#__PURE__*/React.createElement("option", null, "Dusun Krajan"), /*#__PURE__*/React.createElement("option", null, "Dusun Ngasem"), /*#__PURE__*/React.createElement("option", null, "Dusun Sukamulya"))), /*#__PURE__*/React.createElement("div", {
+      placeholder: "mis. Banjar Dinas Tembok",
+      style: css(inp)
+    })), /*#__PURE__*/React.createElement("div", {
       style: css('display:grid;grid-template-columns:1fr 1fr;gap:12px;')
     }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
       style: css(lab)
@@ -2459,6 +3024,6 @@ class Component extends React.Component {
 }
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(/*#__PURE__*/React.createElement(Component, {
-  namaDesa: "Desa Sukamaju",
-  namaOperator: "Budi Santoso"
+  namaDesa: "Kec. Tejakula, Buleleng",
+  namaOperator: "Komang Sutarja"
 }));

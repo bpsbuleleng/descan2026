@@ -16,31 +16,32 @@ test('logged-out users see the login screen, not the app', () => {
   assert.doesNotMatch(txt, /Total KK/);
 });
 
-test('Operator dashboard shows all 8 households', () => {
-  const txt = render({ auth: { role: 'Operator', nama: 'Budi Santoso', wilayah: null }, view: 'dashboard' });
+test('Operator dashboard shows all 18 households', () => {
+  const txt = render({ auth: { role: 'Operator', nama: 'Komang Sutarja', wilayah: null }, view: 'dashboard' });
   assert.match(txt, /Total KK/);
-  assert.match(txt, /"val":8/);
+  assert.match(txt, /"val":18/);
   assert.doesNotMatch(txt, /Hanya-Lihat/);
 });
 
-test('Operator daftar view exposes CRUD controls', () => {
-  const txt = render({ auth: { role: 'Operator', nama: 'Budi Santoso', wilayah: null }, view: 'daftar' });
+test('Operator daftar view exposes CRUD controls and all desa', () => {
+  const txt = render({ auth: { role: 'Operator', nama: 'Komang Sutarja', wilayah: null }, view: 'daftar' });
   assert.match(txt, /\+ Tambah Data/);
-  assert.match(txt, /Slamet Riyadi/);
-  assert.match(txt, /Sukinem/);
+  assert.match(txt, /I Wayan Sukra/);  // Desa Sambirenteng
+  assert.match(txt, /I Gede Mangku/);  // Desa Tembok
+  assert.match(txt, /Desa Penuktukan/); // desa shown / filterable
 });
 
-test('Kepala SLS is read-only and scoped to its dusun', () => {
-  const txt = render({ auth: { role: 'Kepala SLS', nama: 'Sarno', wilayah: 'Dusun Krajan' }, view: 'daftar' });
+test('Kepala SLS is read-only and scoped to its banjar', () => {
+  const txt = render({ auth: { role: 'Kepala SLS', nama: 'I Made Astawan', wilayah: 'Banjar Dinas Tembok' }, view: 'daftar' });
   assert.match(txt, /Hanya-Lihat/);
   assert.doesNotMatch(txt, /\+ Tambah Data/);
   // In-scope household present, out-of-scope household absent.
-  assert.match(txt, /Slamet Riyadi/);   // Dusun Krajan
-  assert.doesNotMatch(txt, /Sukinem/);  // Dusun Ngasem
+  assert.match(txt, /I Wayan Repot/);    // Banjar Dinas Tembok
+  assert.doesNotMatch(txt, /I Wayan Sukra/); // Desa Sambirenteng
 });
 
 test('Kepala SLS dashboard totals are scoped', () => {
-  const txt = render({ auth: { role: 'Kepala SLS', nama: 'Sarno', wilayah: 'Dusun Krajan' }, view: 'dashboard' });
+  const txt = render({ auth: { role: 'Kepala SLS', nama: 'I Made Astawan', wilayah: 'Banjar Dinas Tembok' }, view: 'dashboard' });
   assert.match(txt, /Total KK/);
-  assert.doesNotMatch(txt, /"val":8/); // not all 8
+  assert.doesNotMatch(txt, /"val":18/); // not all 18
 });
