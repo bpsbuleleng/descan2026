@@ -46,26 +46,49 @@ test('Kepala SLS dashboard totals are scoped', () => {
   assert.doesNotMatch(txt, /"val":18/); // not all 18
 });
 
-test('Operator form view renders the 5 FASIH blocks, both rosters, and the validation summary', () => {
+test('Operator form: sidebar lists all blocks, shows progress, and gates submit', () => {
   const c = makeInstance({ auth: { role: 'Operator', nama: 'Op', wilayah: null } });
   c.state.form = c.blankForm();
   c.state.view = 'form';
   const txt = treeText(c.render());
-  assert.match(txt, /Keterangan Identitas Keluarga/);   // Blok I
-  assert.match(txt, /Keterangan Perumahan/);            // Blok II
-  assert.match(txt, /Kepemilikan Aset/);                // Blok III
-  assert.match(txt, /Keterangan Anggota Keluarga/);     // Blok IV
-  assert.match(txt, /Roster Meteran/);                  // R18 roster
-  assert.match(txt, /\+ Tambah Anggota/);               // anggota roster control
+  // sidebar nav (all blocks always present, even when only block I is shown)
+  assert.match(txt, /Keterangan Identitas Keluarga/);
+  assert.match(txt, /Keterangan Perumahan/);
+  assert.match(txt, /Keterangan Kepemilikan Aset/);
+  assert.match(txt, /Keterangan Anggota Keluarga/);
+  assert.match(txt, /Progres Pengisian/);   // progress bar
+  assert.match(txt, /Ringkasan/);           // modal trigger
   assert.match(txt, /Submit \/ Finalisasi/);
-  // a blank form is full of galat → the finalize button is disabled (gate)
-  assert.match(txt, /"disabled":true/);
+  assert.match(txt, /Status Keberadaan Keluarga/); // active block I content
+  // blank form is full of galat → finalize uses the disabled colour
+  assert.match(txt, /#cbd5e1/);
 });
 
-test('a finalizable household enables the Submit/Finalisasi button', () => {
+test('Operator form: roster blocks render their controls when active', () => {
+  const c = makeInstance({ auth: { role: 'Operator', nama: 'Op', wilayah: null } });
+  c.state.form = c.blankForm();
+  c.state.view = 'form';
+  c.state.form._activeBlok = 'II';
+  assert.match(treeText(c.render()), /Roster Meteran/);     // R18 roster (Blok II)
+  c.state.form._activeBlok = 'IV';
+  assert.match(treeText(c.render()), /\+ Tambah Anggota/);  // anggota roster (Blok IV)
+});
+
+test('Operator form: the Ringkasan modal lists galat with jump links', () => {
+  const c = makeInstance({ auth: { role: 'Operator', nama: 'Op', wilayah: null } });
+  c.state.form = c.blankForm();
+  c.state.form._showRingkasan = true;
+  c.state.view = 'form';
+  const txt = treeText(c.render());
+  assert.match(txt, /Daftar Galat/);
+  assert.match(txt, /klik untuk menuju/);
+});
+
+test('Operator form: a finalizable household enables Submit/Finalisasi', () => {
   const c = makeInstance({ auth: { role: 'Operator', nama: 'Op', wilayah: null } });
   c.state.form = c.dataToForm(c.seedWarga().find((w) => w.id === 'w12'));
   c.state.view = 'form';
   const txt = treeText(c.render());
-  assert.doesNotMatch(txt, /"disabled":true/); // galat=0 → submit enabled
+  assert.doesNotMatch(txt, /#cbd5e1/); // finalize not in disabled colour
+  assert.match(txt, /#16a34a/);        // enabled green submit
 });

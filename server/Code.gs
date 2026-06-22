@@ -41,9 +41,11 @@ function handle(e) {
     if (!user) return json({ ok: false, error: 'Sesi tidak sah. Silakan login ulang.' });
 
     if (action === 'bootstrap')        return json(actionBootstrap(user));
-    if (action === 'saveWarga')        return json(requireWrite(user, function(){ return actionSaveWarga(user, req.payload); }));
-    if (action === 'deleteWarga')      return json(requireWrite(user, function(){ return actionDeleteWarga(req.payload); }));
-    if (action === 'submitSanggahan')  return json(requireWrite(user, function(){ return actionSubmitSanggahan(req.payload); }));
+    // Klien mengirim payload terbungkus ({warga:…}, {sanggahan:…}); terima juga
+    // bentuk tak terbungkus agar tahan terhadap kedua format.
+    if (action === 'saveWarga')        return json(requireWrite(user, function(){ var p=req.payload||{}; return actionSaveWarga(user, p.warga||p); }));
+    if (action === 'deleteWarga')      return json(requireWrite(user, function(){ var p=req.payload||{}; return actionDeleteWarga(p.warga||p); }));
+    if (action === 'submitSanggahan')  return json(requireWrite(user, function(){ var p=req.payload||{}; return actionSubmitSanggahan(p.sanggahan||p); }));
     if (action === 'updateSanggahan')  return json(requireWrite(user, function(){ return actionUpdateSanggahan(req.payload); }));
     if (action === 'reset')            return json(requireWrite(user, function(){ seedData(true); return { ok: true }; }));
 

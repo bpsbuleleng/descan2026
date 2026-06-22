@@ -40,6 +40,8 @@ function setPath(obj,path,val){
 // persis seperti kuesioner. Nilai tersimpan = string berkode ("1. ...") agar
 // jelas & mudah divalidasi. Dipakai untuk render form & mesin validasi.
 // ---------------------------------------------------------------------------
+var ORANGE='#e0701f';     // aksen oranye ala FASIH (dipakai di form kuesioner)
+var ORANGE_BG='#fff6ee';
 var KODE={
   statusKeluarga:['0. Tidak Ditemukan (STOP)','1. Ditemukan','3. Meninggal','4. Tidak Eligible','5. Tidak dapat ditemui sampai akhir pendataan'],
   alamatSesuaiKK:['1. Ya, Sesuai KK','2. Tidak Sesuai KK'],
@@ -490,11 +492,11 @@ class Component extends React.Component {
         pengeluaranListrik:'', pengeluaranPulsa:'', pengeluaranInternet:'', foto:this.emptyFoto() },
       meteran:[], aset:{tabungGas3:'',tabungGas55:'',kulkas:'',ac:'',emas:'',komputer:'',sepedaMotor:'',nilaiSepedaMotor:'',mobil:'',nilaiMobil:'',lahanLain:'',bangunanLain:''},
       anggota:[this.mkAnggota({no:1,hubungan:'1. Kepala Keluarga'})],
-      catatan:'', bansos:'Tidak Ada', desilManual:false, desil:'5', _openIdx:0 };
+      catatan:'', bansos:'Tidak Ada', desilManual:false, desil:'5', _openIdx:0, _activeBlok:'I', _showRingkasan:false };
   }
   dataToForm(w){
     const clone=JSON.parse(JSON.stringify(w));
-    return Object.assign(clone,{isNew:false, desilManual:!!w.desilManual, desil:String(w.desil||5), bansos:w.bansos||'Tidak Ada', _openIdx:0});
+    return Object.assign(clone,{isNew:false, desilManual:!!w.desilManual, desil:String(w.desil||5), bansos:w.bansos||'Tidak Ada', _openIdx:0, _activeBlok:'I', _showRingkasan:false});
   }
   opName(){ return (this.state&&this.state.auth&&this.state.auth.nama)||this.props.namaOperator||'Budi Santoso'; }
 
@@ -511,6 +513,27 @@ class Component extends React.Component {
   tambahAnggota(){ if(!this.canCrud()) return; this.setState(s=>{ const ang=s.form.anggota.slice(); ang.push(this.mkAnggota({no:ang.length+1,hubungan:'3. Anak'})); let f=setPath(s.form,'anggota',ang); return {form:setPath(f,'_openIdx',ang.length-1)}; }); }
   hapusAnggota(i){ if(!this.canCrud()) return; this.setState(s=>{ let ang=s.form.anggota.slice(); ang.splice(i,1); ang=ang.map((a,j)=>Object.assign({},a,{no:j+1})); let f=setPath(s.form,'anggota',ang); return {form:setPath(f,'_openIdx',Math.max(0,Math.min(s.form._openIdx,ang.length-1)))}; }); }
   setJumlahMeteran(n){ n=Math.max(0,Math.min(10,Number(n)||0)); this.setState(s=>{ const cur=s.form.meteran.slice(); while(cur.length<n)cur.push({daya:'',jenisId:'ID Pelanggan',idPelanggan:''}); cur.length=n; return {form:setPath(s.form,'meteran',cur)}; }); }
+  // -- Navigasi form (sidebar / blok aktif / modal Ringkasan) ------------------
+  goBlok(blok,openIdx,anchorPath){
+    this.setState(s=>{ let f=setPath(s.form,'_activeBlok',blok); f=setPath(f,'_showRingkasan',false); if(openIdx!=null) f=setPath(f,'_openIdx',openIdx); return {form:f}; });
+    if(anchorPath&&typeof document!=='undefined'){ const id='f_'+anchorPath; setTimeout(()=>{ const el=document.getElementById(id); if(el&&el.scrollIntoView) el.scrollIntoView({behavior:'smooth',block:'center'}); },70); }
+  }
+  goIssue(it){ let openIdx=null; const m=/^anggota\.(\d+)\./.exec(it.path||''); if(m) openIdx=Number(m[1]); this.goBlok(it.blok,openIdx,it.path); }
+  toggleRingkasan(v){ this.setState(s=>({form:setPath(s.form,'_showRingkasan',typeof v==='boolean'?v:!s.form._showRingkasan)})); }
+  // Progres pengisian: berapa field wajib (yang berlaku) sudah terisi.
+  formProgress(k){
+    let total=0,filled=0; const E=v=>!(v==null||String(v).trim()===''); const req=v=>{ total++; if(E(v)) filled++; };
+    req(k.nama); req(k.nik); req(k.noKK); req(getPath(k,'wilayah.kodePos')); req(getPath(k,'wilayah.namaJalan')); req(k.alamatSesuaiKK); req(k.statusKeluarga);
+    BLOK2.concat(BLOK2B).forEach(d=>{ if(d.when&&!d.when(k)) return; req(getPath(k,d.p)); });
+    req(getPath(k,'rumah.foto.depan')); req(getPath(k,'rumah.foto.ruangTamu'));
+    if(/dengan meteran/.test(getPath(k,'rumah.sumberPenerangan')||'')){ if(!(k.meteran||[]).length){ total++; } (k.meteran||[]).forEach(m=>{ req(m.daya); req(m.idPelanggan); }); }
+    ASET22.forEach(a=>req(getPath(k,'aset.'+a[0]))); ASET23.forEach(a=>req(getPath(k,'aset.'+a[0])));
+    if(Number(getPath(k,'aset.sepedaMotor'))>0) req(getPath(k,'aset.nilaiSepedaMotor'));
+    if(Number(getPath(k,'aset.mobil'))>0) req(getPath(k,'aset.nilaiMobil'));
+    (k.anggota||[]).forEach(a=>{ ANGGOTA_FIELDS.forEach(d=>{ if(d.when&&!d.when(k,a)) return; req(a[d.rp]); }); req(a.tglLahir); req(a.blnLahir); req(a.thnLahir);
+      DISABILITAS_ITEMS.forEach(it=>req(getPath(a,'disabilitas.'+it[0]))); KESEHATAN_ITEMS.forEach(it=>req(getPath(a,'kesehatan.'+it[0]))); });
+    return {total:total, filled:filled, pct: total?Math.round(100*filled/total):0};
+  }
   hapusFoto(path){ this.setState(s=>({form:setPath(s.form,path,null)})); }
   handleFoto(path,e){
     const file=e.target.files&&e.target.files[0]; if(!file) return; const before=file.size;
@@ -612,7 +635,7 @@ class Component extends React.Component {
     const today=this.state.today, operator=this.opName();
     const summary=this.deriveSummary(f);
     const foto=Object.assign({},(f.rumah&&f.rumah.foto)||this.emptyFoto());
-    const struct=JSON.parse(JSON.stringify(f)); delete struct.isNew; delete struct._openIdx;
+    const struct=JSON.parse(JSON.stringify(f)); delete struct.isNew; delete struct._openIdx; delete struct._activeBlok; delete struct._showRingkasan;
     const identity={id:f.id,noKK:f.noKK,nik:f.nik,nama:f.nama,desa:f.desa,dusun:f.dusun,rt:f.rt,rw:f.rw,alamat:f.alamat};
     const base=Object.assign({},struct,identity,summary,{status:status,foto:foto,jumlahAnggotaKK:f.jumlahAnggotaKK||summary.jumlahAnggota});
     this.setState(s=>{
@@ -825,26 +848,35 @@ class Component extends React.Component {
     );
   }
 
-  // -- Render satu field FASIH (radio/select/number/rupiah/text) ---------------
+  // -- Render satu field FASIH (label kiri | kontrol kanan) ---------------------
   field(o){
-    const lab='display:block;font-size:12.5px;font-weight:600;color:#3d4152;margin-bottom:7px;line-height:1.45;';
     const inp='width:100%;padding:9px 11px;border:1.5px solid #e0e0de;border-radius:8px;font-family:inherit;font-size:13.5px;color:#18191f;background:#fff;';
-    const head=(<label style={css(lab)}><span style={css('color:#9ba2b6;font-weight:700;margin-right:5px;')}>{o.r}.</span>{o.label}{o.req?<span style={css('color:#dc2626;')}> *</span>:null}</label>);
     let control;
     if(o.type==='radio'){
-      control=(<div style={css('display:flex;flex-direction:column;gap:5px;')}>
+      control=(<div style={css('display:flex;flex-direction:column;gap:6px;')}>
         {o.opts.map((opt,i)=>{ const on=o.value===opt; return (
-          <label key={i} onClick={()=>this.setForm(o.p,opt)} style={css('display:flex;align-items:center;gap:9px;padding:7px 11px;border-radius:8px;cursor:pointer;font-size:13px;border:1.5px solid '+(on?'#bfcef8':'#ececea')+';background:'+(on?'#eef2fc':'#fafaf9')+';color:'+(on?'#1e50d0':'#3d4152')+';font-weight:'+(on?'700':'500')+';')}>
-            <span style={css('flex:none;width:15px;height:15px;border-radius:50%;border:2px solid '+(on?'#1e50d0':'#c4c8d4')+';background:'+(on?'radial-gradient(circle, #1e50d0 0 4px, #fff 5px)':'#fff')+';')}></span>{opt}
+          <label key={i} onClick={()=>this.setForm(o.p,opt)} style={css('display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:8px;cursor:pointer;font-size:13px;border:1.5px solid '+(on?'#f3cba8':'#ececea')+';background:'+(on?ORANGE_BG:'#fff')+';color:'+(on?'#9a4a12':'#3d4152')+';font-weight:'+(on?'700':'500')+';')}>
+            <span style={css('flex:none;width:16px;height:16px;border-radius:50%;border:2px solid '+(on?ORANGE:'#c4c8d4')+';background:'+(on?'radial-gradient(circle, '+ORANGE+' 0 4px, #fff 5px)':'#fff')+';')}></span>{opt}
           </label>); })}
       </div>);
     } else if(o.type==='select'){
       control=(<select value={o.value||''} onChange={e=>this.setForm(o.p,e.target.value)} style={css(inp+'cursor:pointer;')}><option value="">— pilih —</option>{o.opts.map((opt,i)=>(<option key={i} value={opt}>{opt}</option>))}</select>);
     } else {
-      const isNum=o.type==='number'||o.type==='rupiah';
-      control=(<input value={o.value==null?'':o.value} onChange={e=>this.setForm(o.p, isNum?e.target.value.replace(/[^0-9]/g,''):e.target.value)} placeholder={o.type==='rupiah'?'Rp …':''} style={css(inp)} />);
+      const num=o.type==='number', rup=o.type==='rupiah';
+      const setv=v=>this.setForm(o.p, String(v).replace(/[^0-9]/g,''));
+      control=(<div style={css('display:flex;align-items:stretch;')}>
+        {rup&&<span style={css('display:flex;align-items:center;padding:0 11px;border:1.5px solid #e0e0de;border-right:none;border-radius:8px 0 0 8px;background:#f7f7f5;color:#6b7280;font-size:13px;font-weight:600;')}>Rp</span>}
+        <input value={o.value==null?'':o.value} inputMode={(num||rup)?'numeric':undefined} onChange={e=>this.setForm(o.p, (num||rup)?e.target.value.replace(/[^0-9]/g,''):e.target.value)} style={css(inp+'min-width:0;'+(rup?'border-radius:0;':num?'border-radius:8px 0 0 8px;':''))} />
+        {num&&<div style={css('display:flex;flex-direction:column;border:1.5px solid #e0e0de;border-left:none;border-radius:0 8px 8px 0;overflow:hidden;flex:none;')}>
+          <button onClick={()=>setv(Number(o.value||0)+1)} style={css('border:none;border-bottom:1px solid #e0e0de;background:#f7f7f5;cursor:pointer;padding:0 10px;font-size:9px;color:#52576b;flex:1;')}>▲</button>
+          <button onClick={()=>setv(Math.max(0,Number(o.value||0)-1))} style={css('border:none;background:#f7f7f5;cursor:pointer;padding:0 10px;font-size:9px;color:#52576b;flex:1;')}>▼</button>
+        </div>}
+      </div>);
     }
-    return (<div key={o.p} id={'f_'+o.p} style={css('margin-bottom:2px;')}>{head}{control}</div>);
+    return (<div key={o.p} id={'f_'+o.p} style={css('display:grid;grid-template-columns:minmax(150px,38%) 1fr;gap:18px;align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;')}>
+      <div style={css('font-size:13px;font-weight:600;color:#2c3442;line-height:1.5;padding-top:7px;')}><span style={css('color:#b0b5c2;font-weight:700;margin-right:6px;')}>{o.r}.</span>{o.label}{o.req?<span style={css('color:'+ORANGE+';')}> *</span>:null}{o.hint?<div style={css('color:'+ORANGE+';font-style:italic;font-size:11px;font-weight:600;margin-top:3px;')}>{o.hint}</div>:null}</div>
+      <div>{control}</div>
+    </div>);
   }
   // Item Ya/Tidak (R38 disabilitas a–f, R39 keluhan kesehatan a–r).
   yt(path,label,value){
@@ -858,195 +890,228 @@ class Component extends React.Component {
   }
   renderForm(V){
     const k=V.form, val=V.validasi;
-    const card='background:#fff; border-radius:14px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);';
+    const ab=k._activeBlok||'I';
+    const prog=this.formProgress(k);
+    const gB={}; val.galat.forEach(g=>{ gB[g.blok]=(gB[g.blok]||0)+1; });
     const lab='display:block;font-size:12.5px;font-weight:600;color:#3d4152;margin-bottom:6px;';
     const inp='width:100%;padding:9px 11px;border:1.5px solid #e0e0de;border-radius:8px;font-family:inherit;font-size:13.5px;color:#18191f;background:#fff;';
-    const grid='display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;';
-    const head=(rom,title,extra)=>(<div style={css('display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #f0f0ee;')}><span style={css('font-size:14px;font-weight:800;color:#18191f;letter-spacing:-0.01em;')}><span style={css('color:#1e50d0;')}>{rom}</span> · {title}</span>{extra||null}</div>);
-    const txt=(p,label,ph)=>{ const v=getPath(k,p); return (<div><label style={css(lab)}>{label}</label><input value={v==null?'':v} onChange={e=>this.setForm(p,e.target.value)} placeholder={ph||''} style={css(inp)} /></div>); };
-    const fields=(arr)=>arr.filter(d=>!d.when||d.when(k)).map(d=>this.field({p:d.p,r:d.r,label:d.label,type:d.type,opts:d.opts,req:d.req,value:getPath(k,d.p)}));
+    const fld=(d,scope)=>this.field({p:d.p,r:d.r,label:d.label,type:d.type,opts:d.opts,req:d.req,hint:d.hint,value:getPath(scope||k,d.p)});
+    const fields=(arr)=>arr.filter(d=>!d.when||d.when(k)).map(d=>fld(d));
+    const sub=(t)=>(<div style={css('text-align:center;font-size:12.5px;font-weight:800;color:'+ORANGE+';text-transform:uppercase;letter-spacing:0.05em;margin:6px 0 10px;')}>{t}</div>);
     const pakaiMeteran=/dengan meteran/.test(getPath(k,'rumah.sumberPenerangan')||'');
+    const NB=[['I','Keterangan Identitas Keluarga'],['II','Keterangan Perumahan'],['III','Keterangan Kepemilikan Aset'],['IV','Keterangan Anggota Keluarga'],['V','Catatan']];
 
-    const chip=(label,n,color,bg)=>(<div style={css('flex:1;min-width:96px;display:flex;flex-direction:column;gap:2px;padding:10px 13px;border-radius:10px;background:'+bg+';border:1px solid '+color+'33;')}><span style={css('font-size:22px;font-weight:800;color:'+color+';line-height:1;')}>{n}</span><span style={css('font-size:11px;font-weight:700;color:'+color+';text-transform:uppercase;letter-spacing:0.04em;')}>{label}</span></div>);
-
-    // Roster meteran (R18)
-    const meteran=(k.meteran||[]).map((m,i)=>(
-      <div key={i} style={css('background:#fafaf9;border:1px solid #ececea;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;')}>
-        <div style={css('font-size:12.5px;font-weight:800;color:#1e50d0;')}>Meteran ke-{i+1}</div>
-        {this.field({p:'meteran.'+i+'.daya',r:'18b',label:'Daya yang terpasang di rumah ini',type:'radio',opts:KODE.daya,req:true,value:m.daya})}
-        <div style={css('display:grid;grid-template-columns:1fr 1.3fr;gap:10px;')}>
+    // ---- builders per-blok (hanya blok aktif yang dirender) ----
+    const blokI=()=>{
+      const F=[
+        {p:'nama',r:'1a',label:'Nama Kepala Keluarga',type:'text',req:true},
+        {p:'nik',r:'1b',label:'NIK Kepala Keluarga',type:'text',req:true,hint:'16 digit angka'},
+        {p:'noKK',r:'1c',label:'Nomor Kartu Keluarga',type:'text',req:true,hint:'16 digit angka'},
+        {p:'jumlahAnggotaKK',r:'2a',label:'Jumlah anggota keluarga sesuai KK',type:'number'},
+        {p:'desa',r:'3d',label:'Desa/Kelurahan',type:'select',opts:['Desa Sambirenteng','Desa Penuktukan','Desa Tembok'],req:true},
+        {p:'dusun',r:'3h',label:'Nama SLS (Banjar Dinas / Dusun)',type:'text',req:true},
+        {p:'wilayah.namaJalan',r:'3j',label:'Tuliskan Nama Jalan',type:'text',req:true},
+        {p:'wilayah.nomorRumah',r:'3k',label:'Tuliskan Nomor Rumah (isi "-" bila tidak ada)',type:'text'},
+        {p:'wilayah.kodePos',r:'3f',label:'Kode Pos',type:'text',req:true},
+        {p:'rt',r:'3g',label:'RT',type:'text'},
+        {p:'rw',r:'3g',label:'RW',type:'text'},
+        {p:'statusKeluarga',r:'16',label:'Status Keberadaan Keluarga',type:'radio',opts:KODE.statusKeluarga,req:true},
+        {p:'alamatSesuaiKK',r:'4',label:'Apakah alamat tersebut sesuai dengan alamat pada Kartu Keluarga?',type:'radio',opts:KODE.alamatSesuaiKK,req:true}
+      ];
+      return (<div>{sub('Identitas Wilayah & Keluarga')}{F.map(d=>fld(d))}
+        <div style={css('display:grid;grid-template-columns:minmax(150px,38%) 1fr;gap:18px;align-items:start;padding:13px 0;')}>
+          <div style={css('font-size:13px;font-weight:600;color:#2c3442;padding-top:7px;')}><span style={css('color:#b0b5c2;font-weight:700;margin-right:6px;')}>3l.</span>Geotagging lokasi (Lat / Long / Akurasi)</div>
+          <div style={css('display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;')}>
+            <input value={getPath(k,'geotag.lat')||''} onChange={e=>this.setForm('geotag.lat',e.target.value)} placeholder="Latitude" style={css(inp)} />
+            <input value={getPath(k,'geotag.long')||''} onChange={e=>this.setForm('geotag.long',e.target.value)} placeholder="Longitude" style={css(inp)} />
+            <input value={getPath(k,'geotag.akurasi')||''} onChange={e=>this.setForm('geotag.akurasi',e.target.value)} placeholder="Akurasi (m)" style={css(inp)} />
+          </div>
+        </div></div>);
+    };
+    const blokII=()=>{
+      const meteran=(k.meteran||[]).map((m,i)=>(
+        <div key={i} id={'sec-meteran-'+i} style={css('background:'+ORANGE_BG+';border:1px solid #f3cba8;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:6px;')}>
+          <div style={css('font-size:12.5px;font-weight:800;color:'+ORANGE+';')}>Meteran ke-{i+1}</div>
+          {this.field({p:'meteran.'+i+'.daya',r:'18b',label:'Daya yang terpasang di rumah ini',type:'radio',opts:KODE.daya,req:true,value:m.daya})}
           {this.field({p:'meteran.'+i+'.jenisId',r:'18c',label:'Jenis nomor',type:'select',opts:KODE.jenisIdMeteran,req:true,value:m.jenisId})}
           {this.field({p:'meteran.'+i+'.idPelanggan',r:'18c',label:(/No Meteran/.test(m.jenisId||'')?'No Meteran (11 digit)':'ID Pelanggan PLN (12 digit)'),type:'number',req:true,value:m.idPelanggan})}
+        </div>));
+      const fotoSlot=(slot,label,req)=>{ const ft=getPath(k,'rumah.foto.'+slot); const has=!!(ft&&ft.src); return (
+        <div key={slot} style={css('display:flex;flex-direction:column;gap:7px;')}>
+          <span style={css('font-size:12px;font-weight:600;color:#52576b;')}>{label}{req?<span style={css('color:'+ORANGE+';')}> *</span>:<span style={css('color:#9ba2b6;')}> (opsional)</span>}</span>
+          {has?(<div><div style={css('height:140px;border-radius:10px;overflow:hidden;background:#0c1422;')}><img src={ft.src} style={css('width:100%;height:100%;object-fit:cover;display:block;')} /></div><div style={css('display:flex;justify-content:space-between;align-items:center;margin-top:6px;')}><span style={css('font-size:10.5px;color:#52576b;font-family:Menlo,monospace;')}>{this.formatBytes(ft.before)} → {this.formatBytes(ft.after)}</span><button onClick={()=>this.hapusFoto('rumah.foto.'+slot)} style={css('font-size:11.5px;color:#dc2626;background:none;border:none;cursor:pointer;font-weight:700;font-family:inherit;padding:0;')}>Hapus</button></div></div>)
+          :(<label style={css('display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:140px;border:1.5px dashed #d4d4d0;border-radius:10px;background:repeating-linear-gradient(45deg,#f7f7f5,#f7f7f5 8px,#fafaf9 8px,#fafaf9 16px);cursor:pointer;text-align:center;padding:12px;')}><span style={css('font-size:13px;font-weight:700;color:#52576b;')}>Unggah Foto</span><span style={css('font-size:10.5px;color:#9ba2b6;font-family:Menlo,monospace;')}>auto-kompres &lt;200 KB</span><input type="file" accept="image/*" onChange={e=>this.handleFoto('rumah.foto.'+slot,e)} style={css('display:none;')} /></label>)}
+        </div>); };
+      return (<div>
+        {fields(BLOK2)}
+        <div id="sec-meteran" style={css('background:'+ORANGE_BG+';border:1px solid #f3cba8;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:12px;margin:14px 0;')}>
+          <div style={css('display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;')}>
+            <span style={css('font-size:13px;font-weight:800;color:'+ORANGE+';')}>18a. Roster Meteran Listrik</span>
+            <label style={css('display:flex;align-items:center;gap:8px;font-size:12.5px;color:#3d4152;')}>Jumlah meteran<input value={(k.meteran||[]).length} onChange={e=>this.setJumlahMeteran(e.target.value)} style={css('width:64px;padding:7px 9px;border:1.5px solid #e0e0de;border-radius:8px;font-family:inherit;font-size:13.5px;text-align:center;')} /></label>
+          </div>
+          {!pakaiMeteran && <div style={css('font-size:11.5px;color:#9a4a12;background:#fde9d6;border:1px solid #f3cba8;border-radius:8px;padding:8px 11px;')}>Catatan: sumber penerangan saat ini bukan "Listrik PLN dengan meteran", sehingga roster meteran bersifat opsional. Anda tetap dapat mengisinya bila perlu.</div>}
+          {(k.meteran||[]).length>0
+            ? <div style={css('display:flex;flex-direction:column;gap:12px;')}>{meteran}</div>
+            : <span style={css('font-size:12px;color:#9ba2b6;')}>Setel "Jumlah meteran" ≥ 1 untuk menambahkan kartu pengisian meteran.</span>}
+        </div>
+        {fields(BLOK2B)}
+        <div style={css('margin-top:8px;')}>
+          {sub('21. Foto Rumah')}
+          <div style={css('font-size:11.5px;color:#9ba2b6;text-align:center;margin-bottom:12px;')}>Tampak depan &amp; ruang tamu wajib · dikompres otomatis (≤1024px, &lt;200KB)</div>
+          <div style={css('display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;')}>
+            {fotoSlot('depan','a. Tampak depan (atap & dinding)',true)}
+            {fotoSlot('ruangTamu','b. Ruang tamu (dinding & lantai)',true)}
+            {fotoSlot('kamarMandi','c. Kamar mandi (kloset)',false)}
+          </div>
+        </div>
+      </div>);
+    };
+    const blokIII=()=>(<div>
+      {sub('22. Aset Bergerak')}
+      {ASET22.map(a=>this.field({p:'aset.'+a[0],r:'22',label:a[1]+' ('+a[2]+')',type:'number',req:true,value:getPath(k,'aset.'+a[0])}))}
+      {Number(getPath(k,'aset.sepedaMotor'))>0&&this.field({p:'aset.nilaiSepedaMotor',r:'22g',label:'Total nilai aset sepeda motor',type:'rupiah',req:true,value:getPath(k,'aset.nilaiSepedaMotor')})}
+      {Number(getPath(k,'aset.mobil'))>0&&this.field({p:'aset.nilaiMobil',r:'22h',label:'Total nilai aset mobil',type:'rupiah',req:true,value:getPath(k,'aset.nilaiMobil')})}
+      {sub('23. Aset Tidak Bergerak')}
+      {ASET23.map(a=>this.field({p:'aset.'+a[0],r:'23',label:a[1],type:'number',req:true,value:getPath(k,'aset.'+a[0])}))}
+    </div>);
+    const blokIV=()=>{
+      const anggota=(k.anggota||[]).map((a,i)=>{
+        const open=k._openIdx===i; const base='anggota.'+i+'.';
+        const headerRow=(
+          <div style={css('display:flex;align-items:center;justify-content:space-between;gap:10px;')}>
+            <button onClick={()=>this.toggleOpenAnggota(i)} style={css('flex:1;text-align:left;background:none;border:none;cursor:pointer;font-family:inherit;display:flex;flex-direction:column;gap:2px;padding:0;')}>
+              <span style={css('font-size:13.5px;font-weight:800;color:#18191f;')}>{open?'▾':'▸'} {i+1}. {a.nama||'(anggota baru)'}</span>
+              <span style={css('font-size:11.5px;color:#9ba2b6;')}>{a.hubungan||'—'} · {a.jk||'—'}</span>
+            </button>
+            {(k.anggota.length>1)&&(<button onClick={()=>this.hapusAnggota(i)} style={css('flex:none;font-size:11.5px;font-weight:700;color:#b91c1c;background:#fef2f2;border:1px solid #f3c9c9;border-radius:7px;padding:5px 10px;cursor:pointer;font-family:inherit;')}>Hapus</button>)}
+          </div>);
+        if(!open) return (<div key={i} id={'sec-anggota-'+i} style={css('background:#fafaf9;border:1px solid #ececea;border-radius:10px;padding:12px 14px;')}>{headerRow}</div>);
+        return (
+          <div key={i} id={'sec-anggota-'+i} style={css('background:#fff;border:1.5px solid #f3cba8;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px;')}>
+            {headerRow}
+            <div style={css('font-size:11px;color:#9ba2b6;margin-bottom:4px;')}>R24. Nomor Urut Anggota: <strong style={css('color:#52576b;')}>{a.no||i+1}</strong></div>
+            {ANGGOTA_FIELDS.filter(d=>!d.when||d.when(k,a)).map(d=>this.field({p:base+d.rp,r:d.r,label:d.label,type:d.type,opts:d.opts,req:d.req,value:a[d.rp]}))}
+            <div style={css('display:grid;grid-template-columns:minmax(150px,38%) 1fr;gap:18px;align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;')}>
+              <div style={css('font-size:13px;font-weight:600;color:#2c3442;padding-top:7px;')}><span style={css('color:#b0b5c2;font-weight:700;margin-right:6px;')}>30.</span>Tanggal Lahir<span style={css('color:'+ORANGE+';')}> *</span></div>
+              <div style={css('display:grid;grid-template-columns:1fr 1.4fr 1fr 1fr;gap:8px;')}>
+                <input value={a.tglLahir||''} onChange={e=>this.setForm(base+'tglLahir',e.target.value.replace(/[^0-9]/g,''))} placeholder="Tgl" style={css(inp)} />
+                <select value={a.blnLahir||''} onChange={e=>this.setForm(base+'blnLahir',e.target.value)} style={css(inp+'cursor:pointer;')}><option value="">Bulan</option>{KODE.bulan.map((b,j)=>(<option key={j} value={b}>{b}</option>))}</select>
+                <input value={a.thnLahir||''} onChange={e=>this.setForm(base+'thnLahir',e.target.value.replace(/[^0-9]/g,''))} placeholder="Thn" style={css(inp)} />
+                <input value={a.umur||''} onChange={e=>this.setForm(base+'umur',e.target.value.replace(/[^0-9]/g,''))} placeholder="Umur" style={css(inp)} />
+              </div>
+            </div>
+            <div style={css('background:#fafaf9;border:1px solid #ececea;border-radius:10px;padding:12px 14px;margin-top:6px;')}>
+              <div style={css('font-size:12px;font-weight:800;color:'+ORANGE+';margin-bottom:6px;')}>38. Disabilitas (jangka waktu lama)</div>
+              {DISABILITAS_ITEMS.map(it=>this.yt(base+'disabilitas.'+it[0],it[1],getPath(a,'disabilitas.'+it[0])))}
+            </div>
+            <div style={css('background:#fafaf9;border:1px solid #ececea;border-radius:10px;padding:12px 14px;')}>
+              <div style={css('font-size:12px;font-weight:800;color:'+ORANGE+';margin-bottom:6px;')}>39. Keluhan kesehatan kronis/menahun</div>
+              {KESEHATAN_ITEMS.map(it=>this.yt(base+'kesehatan.'+it[0],it[1],getPath(a,'kesehatan.'+it[0])))}
+            </div>
+          </div>);
+      });
+      return (<div>
+        <div style={css('display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;')}>
+          <span style={css('font-size:12.5px;color:#9ba2b6;')}>{(k.anggota||[]).length} anggota</span>
+          <button onClick={()=>this.tambahAnggota()} style={css('font-size:12.5px;font-weight:700;color:#fff;background:'+ORANGE+';border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-family:inherit;')}>+ Tambah Anggota</button>
+        </div>
+        <div style={css('display:flex;flex-direction:column;gap:10px;')}>{anggota}</div>
+      </div>);
+    };
+    const blokV=()=>(<div>
+      <textarea value={k.catatan||''} onChange={e=>this.setForm('catatan',e.target.value)} placeholder="Catatan pencacah (opsional)…" style={css('width:100%;padding:10px 12px;border:1.5px solid #e0e0de;border-radius:9px;font-size:13.5px;color:#18191f;background:#fff;height:80px;resize:vertical;line-height:1.6;font-family:inherit;')}></textarea>
+      <div style={css('margin-top:16px;padding-top:14px;border-top:1px solid #f0f0ee;')}>
+        <div style={css('font-size:12.5px;font-weight:800;color:#52576b;margin-bottom:10px;')}>Penetapan Desa (internal — bukan bagian kuesioner)</div>
+        <div style={css('display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;align-items:start;')}>
+          <div style={css('display:flex;flex-direction:column;gap:10px;')}>
+            <div style={css('display:flex;align-items:center;gap:12px;')}><span style={css(V.formDesilStyle)}>{V.formDesilLabel}</span><span style={css('font-size:12px;color:#9ba2b6;font-style:italic;')}>{V.formDesilHint}</span></div>
+            <label style={css('display:flex;align-items:center;gap:9px;font-size:13px;color:#3d4152;cursor:pointer;')}><input type="checkbox" checked={!!k.desilManual} onChange={e=>this.setForm('desilManual',e.target.checked)} style={css('width:15px;height:15px;accent-color:'+ORANGE+';cursor:pointer;')} />Override desil manual</label>
+            {k.desilManual&&(<select value={k.desil} onChange={e=>this.setForm('desil',e.target.value)} style={css('width:160px;'+inp+'cursor:pointer;')}>{[1,2,3,4,5,6,7,8,9,10].map(d=>(<option key={d} value={String(d)}>Desil {d}</option>))}</select>)}
+          </div>
+          <div><label style={css(lab)}>Status Penerima Bansos</label><select value={k.bansos||'Tidak Ada'} onChange={e=>this.setForm('bansos',e.target.value)} style={css(inp+'cursor:pointer;')}><option>Tidak Ada</option><option>PKH</option><option>BPNT</option><option>PKH + BPNT</option></select></div>
         </div>
       </div>
-    ));
+    </div>);
+    const content = ab==='I'?blokI():ab==='II'?blokII():ab==='III'?blokIII():ab==='IV'?blokIV():blokV();
+    const activeTitle=(NB.find(x=>x[0]===ab)||['',''])[1];
+    const abIdx=NB.findIndex(x=>x[0]===ab);
 
-    // Roster anggota (Blok IV)
-    const anggota=(k.anggota||[]).map((a,i)=>{
-      const open=k._openIdx===i; const base='anggota.'+i+'.';
-      const headerRow=(
-        <div style={css('display:flex;align-items:center;justify-content:space-between;gap:10px;')}>
-          <button onClick={()=>this.toggleOpenAnggota(i)} style={css('flex:1;text-align:left;background:none;border:none;cursor:pointer;font-family:inherit;display:flex;flex-direction:column;gap:2px;padding:0;')}>
-            <span style={css('font-size:13.5px;font-weight:800;color:#18191f;')}>{open?'▾':'▸'} {i+1}. {a.nama||'(anggota baru)'}</span>
-            <span style={css('font-size:11.5px;color:#9ba2b6;')}>{a.hubungan||'—'} · {a.jk||'—'}</span>
-          </button>
-          {(k.anggota.length>1)&&(<button onClick={()=>this.hapusAnggota(i)} style={css('flex:none;font-size:11.5px;font-weight:700;color:#b91c1c;background:#fef2f2;border:1px solid #f3c9c9;border-radius:7px;padding:5px 10px;cursor:pointer;font-family:inherit;')}>Hapus</button>)}
-        </div>);
-      if(!open) return (<div key={i} style={css('background:#fafaf9;border:1px solid #ececea;border-radius:10px;padding:12px 14px;')}>{headerRow}</div>);
-      return (
-        <div key={i} style={css('background:#fafaf9;border:1.5px solid #d7e0f5;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:12px;')}>
-          {headerRow}
-          <div style={css('font-size:11px;color:#9ba2b6;')}>R24. Nomor Urut Anggota: <strong style={css('color:#52576b;')}>{a.no||i+1}</strong></div>
-          {ANGGOTA_FIELDS.filter(d=>!d.when||d.when(k,a)).map(d=>this.field({p:base+d.rp,r:d.r,label:d.label,type:d.type,opts:d.opts,req:d.req,value:a[d.rp]}))}
-          <div>
-            <label style={css(lab)}><span style={css('color:#9ba2b6;font-weight:700;margin-right:5px;')}>30.</span>Tanggal Lahir<span style={css('color:#dc2626;')}> *</span></label>
-            <div style={css('display:grid;grid-template-columns:1fr 1.4fr 1fr 1fr;gap:8px;')}>
-              <input value={a.tglLahir||''} onChange={e=>this.setForm(base+'tglLahir',e.target.value.replace(/[^0-9]/g,''))} placeholder="Tgl" style={css(inp)} />
-              <select value={a.blnLahir||''} onChange={e=>this.setForm(base+'blnLahir',e.target.value)} style={css(inp+'cursor:pointer;')}><option value="">Bulan</option>{KODE.bulan.map((b,j)=>(<option key={j} value={b}>{b}</option>))}</select>
-              <input value={a.thnLahir||''} onChange={e=>this.setForm(base+'thnLahir',e.target.value.replace(/[^0-9]/g,''))} placeholder="Thn" style={css(inp)} />
-              <input value={a.umur||''} onChange={e=>this.setForm(base+'umur',e.target.value.replace(/[^0-9]/g,''))} placeholder="Umur" style={css(inp)} />
-            </div>
-          </div>
-          <div style={css('background:#fff;border:1px solid #ececea;border-radius:10px;padding:12px 14px;')}>
-            <div style={css('font-size:12px;font-weight:800;color:#52576b;margin-bottom:6px;')}>38. Disabilitas (jangka waktu lama)</div>
-            {DISABILITAS_ITEMS.map(it=>this.yt(base+'disabilitas.'+it[0],it[1],getPath(a,'disabilitas.'+it[0])))}
-          </div>
-          <div style={css('background:#fff;border:1px solid #ececea;border-radius:10px;padding:12px 14px;')}>
-            <div style={css('font-size:12px;font-weight:800;color:#52576b;margin-bottom:6px;')}>39. Keluhan kesehatan kronis/menahun</div>
-            {KESEHATAN_ITEMS.map(it=>this.yt(base+'kesehatan.'+it[0],it[1],getPath(a,'kesehatan.'+it[0])))}
-          </div>
-        </div>);
-    });
+    // ---- Sidebar ----
+    const dot=(n)=>n>0?<span style={css('flex:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#fef2f2;color:#b91c1c;font-size:10.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;border:1px solid #fbc5c5;')}>{n}</span>:<span style={css('flex:none;width:8px;height:8px;border-radius:50%;background:#cbe8cf;')}></span>;
+    const navItem=(romawi,label)=>{ const on=ab===romawi; return (
+      <button key={romawi} onClick={()=>this.goBlok(romawi)} style={css('width:100%;text-align:left;display:flex;align-items:center;gap:9px;padding:10px 12px;border:none;border-radius:9px;cursor:pointer;font-family:inherit;font-size:12.5px;line-height:1.35;font-weight:'+(on?'700':'500')+';color:'+(on?'#fff':'#3d4152')+';background:'+(on?ORANGE:'transparent')+';')}>
+        <span style={css('flex:1;')}>{romawi}. {label}</span>{on?null:dot(gB[romawi]||0)}
+      </button>); };
+    const meteranNav=(k.meteran||[]).map((m,i)=>(<button key={'m'+i} onClick={()=>this.goBlok('II',null,'meteran.'+i+'.daya')} style={css('width:100%;text-align:left;padding:5px 12px 5px 28px;border:none;background:none;cursor:pointer;font-family:inherit;font-size:11.5px;color:#6b7280;')}>↳ Meteran ke-{i+1}</button>));
+    const anggotaNav=(k.anggota||[]).map((a,i)=>(<button key={'a'+i} onClick={()=>this.goBlok('IV',i,'anggota.'+i+'.nama')} style={css('width:100%;text-align:left;padding:5px 12px 5px 28px;border:none;background:none;cursor:pointer;font-family:inherit;font-size:11.5px;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;')}>↳ {i+1}. {a.nama||'(anggota baru)'}</button>));
 
-    // Foto rumah (R21)
-    const fotoSlot=(slot,label,req)=>{ const ft=getPath(k,'rumah.foto.'+slot); const has=!!(ft&&ft.src); return (
-      <div key={slot} style={css('display:flex;flex-direction:column;gap:7px;')}>
-        <span style={css('font-size:12px;font-weight:600;color:#52576b;')}>{label}{req?<span style={css('color:#dc2626;')}> *</span>:<span style={css('color:#9ba2b6;')}> (opsional)</span>}</span>
-        {has?(<div><div style={css('height:140px;border-radius:10px;overflow:hidden;background:#0c1422;')}><img src={ft.src} style={css('width:100%;height:100%;object-fit:cover;display:block;')} /></div><div style={css('display:flex;justify-content:space-between;align-items:center;margin-top:6px;')}><span style={css('font-size:10.5px;color:#52576b;font-family:Menlo,monospace;')}>{this.formatBytes(ft.before)} → {this.formatBytes(ft.after)}</span><button onClick={()=>this.hapusFoto('rumah.foto.'+slot)} style={css('font-size:11.5px;color:#dc2626;background:none;border:none;cursor:pointer;font-weight:700;font-family:inherit;padding:0;')}>Hapus</button></div></div>)
-        :(<label style={css('display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:140px;border:1.5px dashed #d4d4d0;border-radius:10px;background:repeating-linear-gradient(45deg,#f7f7f5,#f7f7f5 8px,#fafaf9 8px,#fafaf9 16px);cursor:pointer;text-align:center;padding:12px;')}><span style={css('font-size:13px;font-weight:700;color:#52576b;')}>Unggah Foto</span><span style={css('font-size:10.5px;color:#9ba2b6;font-family:Menlo,monospace;')}>auto-kompres &lt;200 KB</span><input type="file" accept="image/*" onChange={e=>this.handleFoto('rumah.foto.'+slot,e)} style={css('display:none;')} /></label>)}
-      </div>); };
+    const sidebar=(
+      <aside style={css('flex:none;width:248px;align-self:flex-start;position:sticky;top:78px;background:#fff;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);padding:14px;display:flex;flex-direction:column;gap:6px;max-height:calc(100vh - 96px);overflow-y:auto;')}>
+        <div style={css('padding:4px 4px 12px;border-bottom:1px solid #f0f0ee;margin-bottom:6px;')}>
+          <div style={css('display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;')}><span style={css('font-size:11px;font-weight:700;color:#9ba2b6;text-transform:uppercase;letter-spacing:0.05em;')}>Progres Pengisian</span><span style={css('font-size:12px;font-weight:800;color:'+ORANGE+';')}>{prog.pct}%</span></div>
+          <div style={css('height:8px;border-radius:6px;background:#f0f0ee;overflow:hidden;')}><div style={css('height:100%;width:'+prog.pct+'%;background:'+ORANGE+';border-radius:6px;')}></div></div>
+          <div style={css('font-size:11px;color:#9ba2b6;margin-top:5px;')}>{prog.filled} / {prog.total} field wajib terisi</div>
+          <button onClick={()=>this.toggleRingkasan(true)} style={css('margin-top:10px;width:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:9px;border-radius:9px;border:1.5px solid '+(val.galat.length?'#fbc5c5':'#bbf7d0')+';background:'+(val.galat.length?'#fef2f2':'#f0fdf4')+';color:'+(val.galat.length?'#b91c1c':'#166534')+';font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;')}>Ringkasan {val.galat.length>0?<span style={css('background:#b91c1c;color:#fff;border-radius:9px;padding:0 7px;font-size:11px;')}>{val.galat.length}</span>:'✓'}</button>
+        </div>
+        {navItem('I','Keterangan Identitas Keluarga')}
+        {navItem('II','Keterangan Perumahan')}
+        {ab==='II'&&meteranNav}
+        {navItem('III','Keterangan Kepemilikan Aset')}
+        {navItem('IV','Keterangan Anggota Keluarga')}
+        {ab==='IV'&&anggotaNav}
+        {navItem('V','Catatan')}
+      </aside>);
+
+    const chip=(label,n,color,bg)=>(<div style={css('flex:1;min-width:90px;display:flex;flex-direction:column;gap:3px;padding:14px;border-radius:12px;background:'+bg+';border:1px solid '+color+'33;')}><span style={css('font-size:26px;font-weight:800;color:'+color+';line-height:1;')}>{n}</span><span style={css('font-size:11px;font-weight:700;color:'+color+';text-transform:uppercase;letter-spacing:0.04em;')}>{label}</span></div>);
 
     return (
-      <div style={css('max-width:920px; animation:fadein 0.2s ease;')}>
-        {/* Panel Ringkasan validasi */}
-        <div style={css('background:#fff;border-radius:14px;padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);margin-bottom:16px;')}>
-          <div style={css('display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;')}>
-            <span style={css('font-size:14px;font-weight:800;color:#18191f;')}>Ringkasan</span>
-            <span style={css('font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:20px;'+(V.canFinalize?'color:#166534;background:#dcfce7;border:1px solid #bbf7d0;':'color:#b91c1c;background:#fef2f2;border:1px solid #fca5a5;'))}>{V.canFinalize?'Siap difinalisasi':'Belum bisa finalisasi'}</span>
-          </div>
-          <div style={css('display:flex;gap:10px;flex-wrap:wrap;')}>
-            {chip('Galat',val.galat.length,'#dc2626','#fef2f2')}
-            {chip('Peringatan',val.peringatan.length,'#d97706','#fffbeb')}
-            {chip('Kosong',val.kosong.length,'#6b7280','#f3f4f6')}
-          </div>
-          {val.galat.length>0 && (
-            <div style={css('margin-top:12px;max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;')}>
-              {val.galat.slice(0,40).map((g,i)=>(<div key={i} style={css('font-size:12px;color:#7f1d1d;background:#fef2f2;border:1px solid #fde0e0;border-radius:7px;padding:6px 10px;')}><strong style={css('color:#b91c1c;')}>Blok {g.blok} · R{g.rincian}</strong> — {g.label}</div>))}
+      <div style={css('animation:fadein 0.2s ease;display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap;')}>
+        {sidebar}
+        <section style={css('flex:1;min-width:300px;display:flex;flex-direction:column;gap:14px;')}>
+          <div style={css('background:#fff;border-radius:14px;padding:22px 22px 8px;box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);')}>
+            <div style={css('text-align:center;margin-bottom:16px;')}>
+              <div style={css('font-size:16px;font-weight:800;color:'+ORANGE+';text-transform:uppercase;letter-spacing:0.04em;')}>{activeTitle}</div>
+              <div style={css('font-size:11px;color:#9ba2b6;margin-top:3px;')}>Blok {ab}</div>
             </div>
-          )}
-        </div>
-
-        {/* Blok I */}
-        <div style={css(card+'margin-bottom:14px;')} id="blok-1">
-          {head('I','Keterangan Identitas Keluarga')}
-          <div style={css(grid)}>
-            {txt('noKK','No. Kartu Keluarga (16 digit)','5108…')}
-            {txt('nik','NIK Kepala Keluarga (16 digit)','5108…')}
-            <div style={css('grid-column:1/-1;')}>{txt('nama','Nama Kepala Keluarga')}</div>
-            <div><label style={css(lab)}>Desa/Kelurahan</label><select value={k.desa||''} onChange={e=>this.setForm('desa',e.target.value)} style={css(inp+'cursor:pointer;')}><option>Desa Sambirenteng</option><option>Desa Penuktukan</option><option>Desa Tembok</option></select></div>
-            {txt('dusun','Banjar Dinas / Dusun (SLS)','mis. Banjar Dinas Tembok')}
-            {txt('wilayah.namaJalan','Nama Jalan')}
-            {txt('wilayah.nomorRumah','Nomor Rumah (isi "-" bila tidak ada)')}
-            {txt('wilayah.kodePos','Kode Pos')}
-            <div style={css('display:grid;grid-template-columns:1fr 1fr;gap:12px;')}>{txt('rt','RT')}{txt('rw','RW')}</div>
-            {txt('jumlahAnggotaKK','Jumlah anggota sesuai KK')}
+            {content}
           </div>
-          <div style={css('margin-top:14px;display:flex;flex-direction:column;gap:14px;')}>
-            {this.field({p:'statusKeluarga',r:'16',label:'Status Keberadaan Keluarga',type:'radio',opts:KODE.statusKeluarga,req:true,value:k.statusKeluarga})}
-            {this.field({p:'alamatSesuaiKK',r:'4',label:'Apakah alamat sesuai dengan alamat pada Kartu Keluarga?',type:'radio',opts:KODE.alamatSesuaiKK,req:true,value:k.alamatSesuaiKK})}
-            <div>
-              <label style={css(lab)}><span style={css('color:#9ba2b6;font-weight:700;margin-right:5px;')}>3l.</span>Geotagging lokasi (Latitude / Longitude / Akurasi)</label>
-              <div style={css('display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;')}>
-                <input value={getPath(k,'geotag.lat')||''} onChange={e=>this.setForm('geotag.lat',e.target.value)} placeholder="Latitude" style={css(inp)} />
-                <input value={getPath(k,'geotag.long')||''} onChange={e=>this.setForm('geotag.long',e.target.value)} placeholder="Longitude" style={css(inp)} />
-                <input value={getPath(k,'geotag.akurasi')||''} onChange={e=>this.setForm('geotag.akurasi',e.target.value)} placeholder="Akurasi (m)" style={css(inp)} />
+
+          <div style={css('position:sticky;bottom:0;background:#f5f5f2;padding:12px 0;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px solid #e8e8e6;')}>
+            <div style={css('display:flex;gap:8px;')}>
+              <button onClick={()=>abIdx>0&&this.goBlok(NB[abIdx-1][0])} disabled={abIdx<=0} style={css('padding:10px 14px;font-family:inherit;font-size:13px;font-weight:600;border:1.5px solid #e0e0de;background:#fff;color:'+(abIdx<=0?'#c4c8d4':'#3d4152')+';border-radius:9px;cursor:'+(abIdx<=0?'not-allowed':'pointer')+';')}>‹ Blok</button>
+              <button onClick={()=>abIdx<NB.length-1&&this.goBlok(NB[abIdx+1][0])} disabled={abIdx>=NB.length-1} style={css('padding:10px 14px;font-family:inherit;font-size:13px;font-weight:600;border:1.5px solid #e0e0de;background:#fff;color:'+(abIdx>=NB.length-1?'#c4c8d4':'#3d4152')+';border-radius:9px;cursor:'+(abIdx>=NB.length-1?'not-allowed':'pointer')+';')}>Blok ›</button>
+            </div>
+            <div style={css('display:flex;gap:10px;flex-wrap:wrap;')}>
+              <button onClick={V.onBatal} style={css('padding:11px 16px;font-family:inherit;font-size:13.5px;font-weight:600;border:1.5px solid #e0e0de;background:#fff;color:#3d4152;border-radius:9px;cursor:pointer;')}>Batal</button>
+              <button onClick={V.onSimpanDraf} style={css('padding:11px 18px;font-family:inherit;font-size:13.5px;font-weight:700;border:1.5px solid #f3cba8;background:'+ORANGE_BG+';color:'+ORANGE+';border-radius:9px;cursor:pointer;')}>Simpan Draf</button>
+              <button onClick={V.canFinalize?V.onFinalisasi:undefined} disabled={!V.canFinalize} style={css('padding:11px 22px;font-family:inherit;font-size:13.5px;font-weight:700;border:none;border-radius:9px;color:#fff;background:'+(V.canFinalize?'#16a34a':'#cbd5e1')+';cursor:'+(V.canFinalize?'pointer':'not-allowed')+';')}>Submit / Finalisasi</button>
+            </div>
+          </div>
+        </section>
+
+        {/* Modal Ringkasan */}
+        {k._showRingkasan && (
+          <div onClick={()=>this.toggleRingkasan(false)} style={css('position:fixed;inset:0;z-index:80;background:rgba(15,18,28,0.45);display:flex;align-items:center;justify-content:center;padding:20px;animation:fadein 0.15s ease;')}>
+            <div onClick={(e)=>e.stopPropagation()} style={css('background:#fff;border-radius:16px;width:100%;max-width:520px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);')}>
+              <div style={css('display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid #f0f0ee;')}>
+                <div><div style={css('font-size:16px;font-weight:800;color:#18191f;')}>Ringkasan</div><div style={css('font-size:12px;color:#9ba2b6;margin-top:2px;')}>{prog.filled} dari {prog.total} field wajib terisi</div></div>
+                <button onClick={()=>this.toggleRingkasan(false)} style={css('width:30px;height:30px;border-radius:8px;border:none;background:#f3f3f2;color:#52576b;font-size:16px;cursor:pointer;')}>×</button>
+              </div>
+              <div style={css('padding:18px 20px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;')}>
+                <div style={css('display:flex;gap:10px;')}>
+                  {chip('Galat',val.galat.length,'#dc2626','#fef2f2')}
+                  {chip('Peringatan',val.peringatan.length,'#d97706','#fffbeb')}
+                  {chip('Kosong',val.kosong.length,'#6b7280','#f3f4f6')}
+                </div>
+                <div style={css('font-size:12.5px;font-weight:700;padding:9px 12px;border-radius:9px;text-align:center;'+(V.canFinalize?'color:#166534;background:#dcfce7;border:1px solid #bbf7d0;':'color:#b91c1c;background:#fef2f2;border:1px solid #fca5a5;'))}>{V.canFinalize?'✓ Tidak ada galat — siap difinalisasi':val.galat.length+' galat harus diperbaiki sebelum finalisasi'}</div>
+                {val.galat.length>0 && (<div style={css('display:flex;flex-direction:column;gap:6px;')}>
+                  <span style={css('font-size:11px;font-weight:700;color:#9ba2b6;text-transform:uppercase;letter-spacing:0.05em;')}>Daftar Galat — klik untuk menuju</span>
+                  {val.galat.map((g,i)=>(<button key={i} onClick={()=>this.goIssue(g)} style={css('text-align:left;font-size:12px;color:#7f1d1d;background:#fef2f2;border:1px solid #fde0e0;border-radius:8px;padding:8px 11px;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:8px;')}><span style={css('flex:none;font-weight:800;color:#b91c1c;')}>Blok {g.blok}·R{g.rincian}</span><span style={css('flex:1;')}>{g.label}</span><span style={css('flex:none;color:#b91c1c;')}>›</span></button>))}
+                </div>)}
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Blok II */}
-        <div style={css(card+'margin-bottom:14px;')} id="blok-2">
-          {head('II','Keterangan Perumahan')}
-          <div style={css('display:flex;flex-direction:column;gap:16px;')}>
-            {fields(BLOK2)}
-            <div style={css('background:#f7f8fb;border:1px solid #e4e9f4;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:12px;')}>
-              <div style={css('display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;')}>
-                <span style={css('font-size:13px;font-weight:800;color:#18191f;')}>18a. Roster Meteran Listrik</span>
-                <label style={css('display:flex;align-items:center;gap:8px;font-size:12.5px;color:#3d4152;')}>Jumlah meteran<input value={(k.meteran||[]).length} onChange={e=>this.setJumlahMeteran(e.target.value)} style={css('width:64px;padding:7px 9px;border:1.5px solid #e0e0de;border-radius:8px;font-family:inherit;font-size:13.5px;text-align:center;')} /></label>
-              </div>
-              {pakaiMeteran?(meteran.length?meteran:<span style={css('font-size:12px;color:#9ba2b6;')}>Setel jumlah meteran ≥ 1 (sumber penerangan = PLN dengan meteran).</span>):<span style={css('font-size:12px;color:#9ba2b6;')}>Roster meteran hanya untuk "Listrik PLN dengan meteran".</span>}
-            </div>
-            {fields(BLOK2B)}
-            <div>
-              <div style={css('font-size:13px;font-weight:800;color:#18191f;margin-bottom:4px;')}>21. Foto Rumah</div>
-              <div style={css('font-size:11.5px;color:#9ba2b6;margin-bottom:12px;')}>Tampak depan &amp; ruang tamu wajib · dikompres otomatis di perangkat (≤1024px, target &lt;200KB)</div>
-              <div style={css('display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;')}>
-                {fotoSlot('depan','a. Tampak depan (atap & dinding)',true)}
-                {fotoSlot('ruangTamu','b. Ruang tamu (dinding & lantai)',true)}
-                {fotoSlot('kamarMandi','c. Kamar mandi (kloset)',false)}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Blok III */}
-        <div style={css(card+'margin-bottom:14px;')} id="blok-3">
-          {head('III','Keterangan Kepemilikan Aset')}
-          <div style={css('font-size:12.5px;font-weight:700;color:#52576b;margin-bottom:10px;')}>22. Aset bergerak — jumlah yang dimiliki</div>
-          <div style={css(grid)}>
-            {ASET22.map(a=>this.field({p:'aset.'+a[0],r:'22',label:a[1]+' ('+a[2]+')',type:'number',req:true,value:getPath(k,'aset.'+a[0])}))}
-            {Number(getPath(k,'aset.sepedaMotor'))>0&&this.field({p:'aset.nilaiSepedaMotor',r:'22g',label:'Total nilai aset sepeda motor',type:'rupiah',req:true,value:getPath(k,'aset.nilaiSepedaMotor')})}
-            {Number(getPath(k,'aset.mobil'))>0&&this.field({p:'aset.nilaiMobil',r:'22h',label:'Total nilai aset mobil',type:'rupiah',req:true,value:getPath(k,'aset.nilaiMobil')})}
-          </div>
-          <div style={css('font-size:12.5px;font-weight:700;color:#52576b;margin:16px 0 10px;')}>23. Aset tidak bergerak</div>
-          <div style={css(grid)}>
-            {ASET23.map(a=>this.field({p:'aset.'+a[0],r:'23',label:a[1],type:'number',req:true,value:getPath(k,'aset.'+a[0])}))}
-          </div>
-        </div>
-
-        {/* Blok IV */}
-        <div style={css(card+'margin-bottom:14px;')} id="blok-4">
-          {head('IV','Keterangan Anggota Keluarga',(<button onClick={()=>this.tambahAnggota()} style={css('font-size:12.5px;font-weight:700;color:#fff;background:#1e50d0;border:none;border-radius:8px;padding:7px 13px;cursor:pointer;font-family:inherit;')}>+ Tambah Anggota</button>))}
-          <div style={css('display:flex;flex-direction:column;gap:10px;')}>{anggota}</div>
-        </div>
-
-        {/* Blok V + penetapan internal */}
-        <div style={css(card+'margin-bottom:14px;')} id="blok-5">
-          {head('V','Catatan')}
-          <textarea value={k.catatan||''} onChange={e=>this.setForm('catatan',e.target.value)} placeholder="Catatan pencacah (opsional)…" style={css('width:100%;padding:10px 12px;border:1.5px solid #e0e0de;border-radius:9px;font-size:13.5px;color:#18191f;background:#fff;height:74px;resize:vertical;line-height:1.6;font-family:inherit;')}></textarea>
-          <div style={css('margin-top:16px;padding-top:14px;border-top:1px solid #f0f0ee;')}>
-            <div style={css('font-size:12.5px;font-weight:800;color:#52576b;margin-bottom:10px;')}>Penetapan Desa (internal — bukan bagian kuesioner)</div>
-            <div style={css('display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;align-items:start;')}>
-              <div style={css('display:flex;flex-direction:column;gap:10px;')}>
-                <div style={css('display:flex;align-items:center;gap:12px;')}><span style={css(V.formDesilStyle)}>{V.formDesilLabel}</span><span style={css('font-size:12px;color:#9ba2b6;font-style:italic;')}>{V.formDesilHint}</span></div>
-                <label style={css('display:flex;align-items:center;gap:9px;font-size:13px;color:#3d4152;cursor:pointer;')}><input type="checkbox" checked={!!k.desilManual} onChange={e=>this.setForm('desilManual',e.target.checked)} style={css('width:15px;height:15px;accent-color:#1e50d0;cursor:pointer;')} />Override desil manual</label>
-                {k.desilManual&&(<select value={k.desil} onChange={e=>this.setForm('desil',e.target.value)} style={css('width:160px;'+inp+'cursor:pointer;')}>{[1,2,3,4,5,6,7,8,9,10].map(d=>(<option key={d} value={String(d)}>Desil {d}</option>))}</select>)}
-              </div>
-              <div><label style={css(lab)}>Status Penerima Bansos</label><select value={k.bansos||'Tidak Ada'} onChange={e=>this.setForm('bansos',e.target.value)} style={css(inp+'cursor:pointer;')}><option>Tidak Ada</option><option>PKH</option><option>BPNT</option><option>PKH + BPNT</option></select></div>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer aksi */}
-        <div style={css('position:sticky;bottom:0;background:#f5f5f2;padding:14px 0;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px solid #e8e8e6;')}>
-          <span style={css('font-size:12px;color:'+(V.canFinalize?'#166534':'#b45309')+';font-weight:600;')}>{V.canFinalize?'Tidak ada galat — siap difinalisasi.':val.galat.length+' galat harus diperbaiki sebelum finalisasi.'}</span>
-          <div style={css('display:flex;gap:10px;flex-wrap:wrap;')}>
-            <button onClick={V.onBatal} style={css('padding:11px 18px;font-family:inherit;font-size:13.5px;font-weight:600;border:1.5px solid #e0e0de;background:#fff;color:#3d4152;border-radius:9px;cursor:pointer;')}>Batal</button>
-            <button onClick={V.onSimpanDraf} style={css('padding:11px 20px;font-family:inherit;font-size:13.5px;font-weight:700;border:1.5px solid #c7d7f6;background:#eef2fc;color:#1e50d0;border-radius:9px;cursor:pointer;')}>Simpan Draf</button>
-            <button onClick={V.canFinalize?V.onFinalisasi:undefined} disabled={!V.canFinalize} style={css('padding:11px 24px;font-family:inherit;font-size:13.5px;font-weight:700;border:none;border-radius:9px;color:#fff;background:'+(V.canFinalize?'#16a34a':'#cbd5e1')+';cursor:'+(V.canFinalize?'pointer':'not-allowed')+';')}>Submit / Finalisasi</button>
-          </div>
-        </div>
+        )}
       </div>
     );
   }
