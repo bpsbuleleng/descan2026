@@ -1,13 +1,4 @@
-/* JSX automatic-runtime shim -> React.createElement (no bundler/Babel needed) */
-var _Fragment = React.Fragment;
-function _jsx(type, config, maybeKey){
-  var props = {}; for (var k in config){ if(k!=='children') props[k]=config[k]; }
-  if (maybeKey !== undefined) props.key = maybeKey;
-  var ch = config ? config.children : undefined;
-  if (Array.isArray(ch)) return React.createElement.apply(React, [type, props].concat(ch));
-  return React.createElement(type, props, ch);
-}
-var _jsxs = _jsx;
+/* AUTO-GENERATED from src/app.jsx by build.js — do not edit directly. */
 // ---------------------------------------------------------------------------
 // css(): parse an inline-style string ("a:b;c:d") into a React style object.
 // Keeps the design's style strings usable verbatim as style={css("...")}.
@@ -44,53 +35,137 @@ class Component extends React.Component {
     super(props);
     this.ASET = ['Sepeda', 'Sepeda Motor', 'Mobil', 'Kulkas', 'TV', 'AC', 'Perahu', 'Ternak'];
     this.BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    // Akun demo (prototipe — autentikasi sisi-klien). Hanya Operator & Kepala Desa
+    // yang dapat CRUD; Kepala SLS bersifat hanya-lihat dan dibatasi ke wilayahnya.
+    this.ACCOUNTS = [{
+      username: 'kepaladesa',
+      password: 'desa123',
+      nama: 'H. Sutrisno',
+      role: 'Kepala Desa',
+      wilayah: null
+    }, {
+      username: 'operator',
+      password: 'operator123',
+      nama: 'Budi Santoso',
+      role: 'Operator',
+      wilayah: null
+    }, {
+      username: 'sls.krajan',
+      password: 'sls123',
+      nama: 'Sarno',
+      role: 'Kepala SLS',
+      wilayah: 'Dusun Krajan'
+    }, {
+      username: 'sls.ngasem',
+      password: 'sls123',
+      nama: 'Yatmin',
+      role: 'Kepala SLS',
+      wilayah: 'Dusun Ngasem'
+    }, {
+      username: 'sls.sukamulya',
+      password: 'sls123',
+      nama: 'Marni',
+      role: 'Kepala SLS',
+      wilayah: 'Dusun Sukamulya'
+    }];
     this.state = this.initState();
   }
 
-  // Persistensi lokal: data warga & sanggahan disimpan di localStorage agar tidak
-  // hilang saat halaman di-refresh. Key di-versikan supaya aman bila skema berubah.
-  static get STORE_KEY() {
-    return 'dtsen-desa-v1';
+  // -- Sesi login --------------------------------------------------------------
+  static get AUTH_KEY() {
+    return 'dtsen-desa-auth-v1';
   }
-  loadStore() {
+  loadAuth() {
     try {
-      const raw = window.localStorage.getItem(Component.STORE_KEY);
+      const raw = window.localStorage.getItem(Component.AUTH_KEY);
       if (!raw) return null;
-      const d = JSON.parse(raw);
-      if (d && Array.isArray(d.warga) && Array.isArray(d.sanggahan)) return d;
+      const a = JSON.parse(raw);
+      if (a && a.role && a.nama) return a;
     } catch (e) {}
     return null;
   }
-  saveStore(state) {
-    try {
-      window.localStorage.setItem(Component.STORE_KEY, JSON.stringify({
-        warga: state.warga,
-        sanggahan: state.sanggahan
-      }));
-    } catch (e) {}
+  canCrud() {
+    const a = this.state.auth;
+    return !!a && (a.role === 'Operator' || a.role === 'Kepala Desa');
   }
-  resetStore() {
+  // Warga yang boleh dilihat: Kepala SLS dibatasi ke wilayahnya, lainnya melihat semua.
+  visibleWarga() {
+    const a = this.state.auth;
+    const w = this.state.warga;
+    return a && a.wilayah ? w.filter(x => x.dusun === a.wilayah) : w;
+  }
+  onLoginField(e) {
+    const k = e.target.getAttribute('data-login');
+    const v = e.target.value;
+    this.setState(s => ({
+      loginForm: Object.assign({}, s.loginForm, {
+        [k]: v,
+        error: ''
+      })
+    }));
+  }
+  login(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    const f = this.state.loginForm;
+    const u = (f.username || '').trim().toLowerCase();
+    const acc = this.ACCOUNTS.find(a => a.username === u && a.password === f.password);
+    if (!acc) {
+      this.setState(s => ({
+        loginForm: Object.assign({}, s.loginForm, {
+          error: 'Username atau kata sandi salah.'
+        })
+      }));
+      return;
+    }
+    const auth = {
+      username: acc.username,
+      nama: acc.nama,
+      role: acc.role,
+      wilayah: acc.wilayah
+    };
     try {
-      window.localStorage.removeItem(Component.STORE_KEY);
-    } catch (e) {}
+      window.localStorage.setItem(Component.AUTH_KEY, JSON.stringify(auth));
+    } catch (e2) {}
     this.setState({
-      warga: this.seedWarga(),
-      sanggahan: this.seedSanggahan(),
+      auth: auth,
       view: 'dashboard',
-      selectedId: null,
-      selectedTanggal: null,
-      form: null,
-      editId: null,
+      loginForm: {
+        username: '',
+        password: '',
+        error: ''
+      },
       toast: {
         type: 'ok',
-        msg: 'Data contoh dipulihkan.'
+        msg: 'Selamat datang, ' + acc.nama + '.'
       }
     });
     this.autoClear();
   }
+  logout() {
+    try {
+      window.localStorage.removeItem(Component.AUTH_KEY);
+    } catch (e) {}
+    this.setState({
+      auth: null,
+      view: 'dashboard',
+      form: null,
+      editId: null,
+      selectedId: null,
+      selectedTanggal: null,
+      showSanggahanForm: false,
+      processingId: null,
+      toast: null
+    });
+  }
   initState() {
     const saved = this.loadStore();
     return {
+      auth: this.loadAuth(),
+      loginForm: {
+        username: '',
+        password: '',
+        error: ''
+      },
       view: 'dashboard',
       search: '',
       filterRt: 'semua',
@@ -115,6 +190,48 @@ class Component extends React.Component {
       toast: null,
       today: '2026-06-19'
     };
+  }
+
+  // -- Persistensi data (localStorage) -----------------------------------------
+  static get STORE_KEY() {
+    return 'dtsen-desa-v1';
+  }
+  loadStore() {
+    try {
+      const raw = window.localStorage.getItem(Component.STORE_KEY);
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      if (d && Array.isArray(d.warga) && Array.isArray(d.sanggahan)) return d;
+    } catch (e) {}
+    return null;
+  }
+  saveStore(state) {
+    try {
+      window.localStorage.setItem(Component.STORE_KEY, JSON.stringify({
+        warga: state.warga,
+        sanggahan: state.sanggahan
+      }));
+    } catch (e) {}
+  }
+  resetStore() {
+    if (!this.canCrud()) return;
+    try {
+      window.localStorage.removeItem(Component.STORE_KEY);
+    } catch (e) {}
+    this.setState({
+      warga: this.seedWarga(),
+      sanggahan: this.seedSanggahan(),
+      view: 'dashboard',
+      selectedId: null,
+      selectedTanggal: null,
+      form: null,
+      editId: null,
+      toast: {
+        type: 'ok',
+        msg: 'Data contoh dipulihkan.'
+      }
+    });
+    this.autoClear();
   }
   componentDidUpdate(_prevProps, prevState) {
     if (prevState.warga !== this.state.warga || prevState.sanggahan !== this.state.sanggahan) {
@@ -670,7 +787,7 @@ class Component extends React.Component {
     return base;
   }
   opName() {
-    return this.props.namaOperator || 'Budi Santoso';
+    return this.state && this.state.auth && this.state.auth.nama || this.props.namaOperator || 'Budi Santoso';
   }
   nav(key) {
     this.setState({
@@ -692,6 +809,7 @@ class Component extends React.Component {
     this.setState(o);
   }
   onTambah() {
+    if (!this.canCrud()) return;
     this.setState({
       form: this.blankForm(),
       editId: null,
@@ -699,6 +817,7 @@ class Component extends React.Component {
     });
   }
   mulaiEdit(id) {
+    if (!this.canCrud()) return;
     const w = this.state.warga.find(x => x.id === id);
     this.setState({
       form: this.dataToForm(w),
@@ -828,6 +947,7 @@ class Component extends React.Component {
     }), 3600);
   }
   simpan() {
+    if (!this.canCrud()) return;
     const f = this.state.form;
     if (!f.nama.trim() || !f.nik.trim()) {
       this.setState({
@@ -915,6 +1035,7 @@ class Component extends React.Component {
     }));
   }
   onBukaFormSanggahan() {
+    if (!this.canCrud()) return;
     this.setState({
       showSanggahanForm: true,
       sanggahanForm: {
@@ -931,6 +1052,7 @@ class Component extends React.Component {
     });
   }
   onSubmitSanggahan() {
+    if (!this.canCrud()) return;
     const f = this.state.sanggahanForm;
     if (!f.pengaju.trim() || !f.alasan.trim()) {
       this.setState({
@@ -972,6 +1094,7 @@ class Component extends React.Component {
     this.autoClear();
   }
   updateStatus(id, status) {
+    if (!this.canCrud()) return;
     this.setState(s => ({
       sanggahan: s.sanggahan.map(x => x.id === id ? Object.assign({}, x, {
         status: status
@@ -979,12 +1102,14 @@ class Component extends React.Component {
     }));
   }
   mulaiProses(id) {
+    if (!this.canCrud()) return;
     this.setState({
       processingId: id,
       processCatatan: ''
     });
   }
   selesaikanSanggahan(id, status, catatan) {
+    if (!this.canCrud()) return;
     this.setState(s => ({
       sanggahan: s.sanggahan.map(x => x.id === id ? Object.assign({}, x, {
         status: status,
@@ -997,10 +1122,19 @@ class Component extends React.Component {
   }
   renderVals() {
     const st = this.state;
+    const auth = st.auth;
+    const canCrud = this.canCrud();
     const namaDesa = this.props.namaDesa || 'Desa Sukamaju';
     const namaOperator = this.opName();
     const opInitials = namaOperator.split(' ').slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
-    const sanggahanPending = st.sanggahan.filter(s => s.status === 'Diajukan' || s.status === 'Diproses').length;
+    // Lingkup data: Kepala SLS hanya melihat warga & sanggahan di wilayahnya.
+    const vWarga = this.visibleWarga();
+    const vIds = {};
+    vWarga.forEach(w => {
+      vIds[w.id] = true;
+    });
+    const vSanggahan = st.sanggahan.filter(sg => vIds[sg.wargaId]);
+    const sanggahanPending = vSanggahan.filter(s => s.status === 'Diajukan' || s.status === 'Diproses').length;
     const titles = {
       dashboard: 'Dashboard',
       daftar: 'Daftar Warga',
@@ -1019,7 +1153,7 @@ class Component extends React.Component {
     const sanggahanLabel = 'Sanggahan' + (sanggahanPending > 0 ? ' (' + sanggahanPending + ')' : '');
     const navItems = [mkNav('dashboard', 'Dashboard'), mkNav('daftar', 'Daftar Warga'), mkNav('sanggahan', sanggahanLabel)];
     const q = st.search.trim().toLowerCase();
-    let list = st.warga.filter(w => {
+    let list = vWarga.filter(w => {
       if (q && (w.nama + ' ' + w.nik + ' ' + w.noKK).toLowerCase().indexOf(q) < 0) return false;
       if (st.filterRt !== 'semua' && 'RT ' + w.rt + ' / RW ' + w.rw !== st.filterRt) return false;
       if (st.filterDesil !== 'semua') {
@@ -1061,7 +1195,7 @@ class Component extends React.Component {
       };
     });
     const rtSet = [];
-    st.warga.forEach(w => {
+    vWarga.forEach(w => {
       const v = 'RT ' + w.rt + ' / RW ' + w.rw;
       if (rtSet.indexOf(v) < 0) rtSet.push(v);
     });
@@ -1116,7 +1250,7 @@ class Component extends React.Component {
       value: 'Ditolak',
       label: 'Ditolak'
     }];
-    const all = st.warga;
+    const all = vWarga;
     const statTotal = all.length,
       statPrioritas = all.filter(w => w.desil <= 4).length,
       statBansos = all.filter(w => w.bansos !== 'Tidak Ada').length;
@@ -1297,7 +1431,7 @@ class Component extends React.Component {
     }
     const sanggahanForSnap = selectedSnap && selectedSnap.sanggahanList ? selectedSnap.sanggahanList : [];
     const canAjukanSanggahan = !st.showSanggahanForm;
-    const sgFiltered = st.sanggahan.filter(sg => st.filterSanggahan === 'semua' || sg.status === st.filterSanggahan);
+    const sgFiltered = vSanggahan.filter(sg => st.filterSanggahan === 'semua' || sg.status === st.filterSanggahan);
     const sanggahanListDisplay = sgFiltered.map(sg => {
       const wg = st.warga.find(w => w.id === sg.wargaId);
       const ss = this.sgStatusStyle(sg.status);
@@ -1345,6 +1479,10 @@ class Component extends React.Component {
       toastStyle = 'position:fixed;right:20px;bottom:20px;z-index:60;padding:13px 18px;border-radius:12px;font-size:13px;font-weight:600;color:#fff;max-width:380px;box-shadow:0 8px 24px rgba(0,0,0,0.2);animation:tslide 0.25s ease;background:' + (ok ? '#16a34a' : '#dc2626') + ';';
     }
     return {
+      auth: auth,
+      canCrud: canCrud,
+      roleLabel: auth ? auth.role : '',
+      wilayahLabel: auth && auth.wilayah ? auth.wilayah : '',
       namaDesa: namaDesa,
       namaOperator: namaOperator,
       opInitials: opInitials,
@@ -1371,7 +1509,7 @@ class Component extends React.Component {
       wargaTampil: wargaTampil,
       kosong: wargaTampil.length === 0,
       jumlahTampil: wargaTampil.length,
-      jumlahTotal: st.warga.length,
+      jumlahTotal: vWarga.length,
       statTotal: statTotal,
       statPrioritas: statPrioritas,
       statBansos: statBansos,
@@ -1442,7 +1580,89 @@ class Component extends React.Component {
       toastStyle: toastStyle
     };
   }
+  renderLogin() {
+    const lf = this.state.loginForm;
+    const inpL = 'width:100%;padding:11px 13px;border:1.5px solid #e0e0de;border-radius:9px;font-family:inherit;font-size:14px;color:#18191f;background:#fafaf9;';
+    const labL = 'display:block;font-size:12px;font-weight:600;color:#52576b;margin-bottom:6px;';
+    const demo = [{
+      r: 'Kepala Desa',
+      u: 'kepaladesa',
+      p: 'desa123',
+      note: 'CRUD penuh'
+    }, {
+      r: 'Operator',
+      u: 'operator',
+      p: 'operator123',
+      note: 'CRUD penuh'
+    }, {
+      r: 'Kepala SLS',
+      u: 'sls.krajan',
+      p: 'sls123',
+      note: 'Hanya-lihat · Dusun Krajan'
+    }];
+    return /*#__PURE__*/React.createElement("div", {
+      style: css("min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; background:#f5f5f2; font-family:'Plus Jakarta Sans',system-ui,sans-serif; color:#18191f;")
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('width:100%; max-width:400px; display:flex; flex-direction:column; gap:16px;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('width:48px; height:48px; border-radius:13px; background:#1e50d0; display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:800; color:#fff; letter-spacing:-0.03em;')
+    }, "DT"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:19px; font-weight:800; letter-spacing:-0.02em;')
+    }, "DTSEN Desa"), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:12.5px; color:#9ba2b6; margin-top:2px;')
+    }, "Masuk untuk mengelola data desa"))), /*#__PURE__*/React.createElement("form", {
+      onSubmit: e => this.login(e),
+      style: css('background:#fff; border-radius:14px; padding:22px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05); display:flex; flex-direction:column; gap:14px;')
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(labL)
+    }, "Username"), /*#__PURE__*/React.createElement("input", {
+      "data-login": "username",
+      value: lf.username,
+      onChange: e => this.onLoginField(e),
+      autoFocus: true,
+      placeholder: "mis. operator",
+      style: css(inpL)
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(labL)
+    }, "Kata Sandi"), /*#__PURE__*/React.createElement("input", {
+      "data-login": "password",
+      type: "password",
+      value: lf.password,
+      onChange: e => this.onLoginField(e),
+      placeholder: "••••••",
+      style: css(inpL)
+    })), lf.error && /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:12.5px; font-weight:600; color:#b91c1c; background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; padding:9px 12px;')
+    }, lf.error), /*#__PURE__*/React.createElement("button", {
+      type: "submit",
+      style: css('padding:12px; font-family:inherit; font-size:14px; font-weight:700; border:none; background:#1e50d0; color:#fff; border-radius:9px; cursor:pointer; margin-top:2px;')
+    }, "Masuk")), /*#__PURE__*/React.createElement("div", {
+      style: css('background:#fff; border-radius:14px; padding:16px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:10px;')
+    }, "Akun Demo"), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; flex-direction:column; gap:8px;')
+    }, demo.map((d, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: css('display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:12.5px;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; flex-direction:column; gap:1px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-weight:700; color:#18191f;')
+    }, d.r), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11px; color:#9ba2b6;')
+    }, d.note)), /*#__PURE__*/React.createElement("span", {
+      style: css('font-family:Menlo,monospace; font-size:11.5px; color:#52576b; background:#f5f5f2; padding:4px 9px; border-radius:7px; white-space:nowrap;')
+    }, d.u, " / ", d.p))))), /*#__PURE__*/React.createElement("div", {
+      style: css('text-align:center; font-size:11px; font-weight:700; color:#92400e; letter-spacing:0.03em;')
+    }, "PROTOTYPE · autentikasi demo sisi-klien")));
+  }
   render() {
+    if (!this.state.auth) {
+      return this.renderLogin();
+    }
     const V = this.renderVals();
     const card = 'background:#fff; border-radius:14px; padding:22px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);';
     const th = 'text-align:left; padding:12px 16px; font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.06em;';
@@ -1454,1210 +1674,791 @@ class Component extends React.Component {
       color,
       val,
       sub
-    }) => /*#__PURE__*/_jsxs("div", {
-      style: css('background:#fff; border-radius:14px; padding:18px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);'),
-      children: [/*#__PURE__*/_jsx("div", {
-        style: css('font-size:11.5px; font-weight:600; color:#9ba2b6;'),
-        children: title
-      }), /*#__PURE__*/_jsx("div", {
-        style: css('font-size:30px; font-weight:800; color:' + color + '; letter-spacing:-0.03em; margin:5px 0 3px;'),
-        children: val
-      }), /*#__PURE__*/_jsx("div", {
-        style: css('font-size:11.5px; color:#9ba2b6;'),
-        children: sub
-      })]
-    });
-    return /*#__PURE__*/_jsxs("div", {
-      style: css("min-height:100vh; display:flex; flex-direction:column; background:#f5f5f2; font-family:'Plus Jakarta Sans',system-ui,sans-serif; color:#18191f;"),
-      children: [/*#__PURE__*/_jsxs("header", {
-        style: css('position:sticky; top:0; z-index:30; background:#fff; border-bottom:1px solid #e8e8e6; height:58px; display:flex; align-items:center; justify-content:space-between; padding:0 20px; gap:14px;'),
-        children: [/*#__PURE__*/_jsxs("div", {
-          style: css('display:flex; align-items:center; gap:11px; flex:none;'),
-          children: [/*#__PURE__*/_jsx("div", {
-            style: css('width:34px; height:34px; border-radius:9px; background:#1e50d0; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800; color:#fff; letter-spacing:-0.03em; flex:none;'),
-            children: "DT"
-          }), /*#__PURE__*/_jsxs("div", {
-            children: [/*#__PURE__*/_jsx("div", {
-              style: css('font-size:15px; font-weight:800; color:#18191f; letter-spacing:-0.02em; line-height:1.2;'),
-              children: "DTSEN Desa"
-            }), /*#__PURE__*/_jsx("div", {
-              style: css('font-size:11px; color:#9ba2b6; font-weight:500; line-height:1.2;'),
-              children: V.namaDesa
-            })]
-          })]
-        }), /*#__PURE__*/_jsxs("div", {
-          style: css('display:flex; align-items:center; gap:10px; flex:none;'),
-          children: [/*#__PURE__*/_jsx("button", {
-            onClick: () => {
-              if (window.confirm('Pulihkan data contoh? Semua perubahan tersimpan akan dihapus.')) this.resetStore();
-            },
-            title: "Pulihkan data contoh dan hapus data tersimpan",
-            style: css('font-size:12px; font-weight:600; color:#52576b; background:#f3f3f2; border:1px solid #e8e8e6; padding:5px 11px; border-radius:7px; cursor:pointer; white-space:nowrap;'),
-            children: "Reset data"
-          }), /*#__PURE__*/_jsx("span", {
-            style: css('font-size:11px; font-weight:700; color:#92400e; background:#fffbeb; border:1px solid #fde68a; padding:5px 10px; border-radius:20px; letter-spacing:0.03em; white-space:nowrap;'),
-            children: "PROTOTYPE"
-          }), /*#__PURE__*/_jsx("span", {
-            style: css('font-size:12px; color:#9ba2b6; font-weight:500; white-space:nowrap;'),
-            children: V.tanggalHariIni
-          }), /*#__PURE__*/_jsx("div", {
-            style: css('width:32px; height:32px; border-radius:50%; background:#eef2fc; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#1e50d0; flex:none;'),
-            title: V.namaOperator,
-            children: V.opInitials
-          })]
-        })]
-      }), /*#__PURE__*/_jsx("div", {
-        style: css('position:sticky; top:58px; z-index:29; background:#fff; border-bottom:1px solid #e8e8e6; overflow-x:auto; -webkit-overflow-scrolling:touch;'),
-        children: /*#__PURE__*/_jsx("div", {
-          style: css('display:flex; min-width:max-content; padding:0 20px;'),
-          children: V.navItems.map((item, i) => /*#__PURE__*/_jsx("button", {
-            onClick: item.onClick,
-            style: css(item.style),
-            children: item.label
-          }, i))
-        })
-      }), /*#__PURE__*/_jsxs("main", {
-        style: css('flex:1; padding:24px 20px; max-width:1200px; width:100%; margin:0 auto;'),
-        children: [V.isDashboard && /*#__PURE__*/_jsxs("div", {
-          style: css('display:flex; flex-direction:column; gap:20px; animation:fadein 0.2s ease;'),
-          children: [/*#__PURE__*/_jsxs("div", {
-            style: css('display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px;'),
-            children: [/*#__PURE__*/_jsx(Stat, {
-              title: "Total KK",
-              color: "#18191f",
-              val: V.statTotal,
-              sub: "keluarga terdata"
-            }), /*#__PURE__*/_jsx(Stat, {
-              title: "Prioritas Bansos",
-              color: "#c2410c",
-              val: V.statPrioritas,
-              sub: "desil 1–4"
-            }), /*#__PURE__*/_jsx(Stat, {
-              title: "Penerima Bansos",
-              color: "#166534",
-              val: V.statBansos,
-              sub: "PKH / BPNT aktif"
-            }), /*#__PURE__*/_jsx(Stat, {
-              title: "Perubahan Desil",
-              color: "#b45309",
-              val: V.statPerubahan,
-              sub: "update terbaru"
-            }), /*#__PURE__*/_jsx(Stat, {
-              title: "Sanggahan Aktif",
-              color: "#d97706",
-              val: V.statSanggahan,
-              sub: "menunggu proses"
-            })]
-          }), /*#__PURE__*/_jsxs("div", {
-            style: css('display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; align-items:start;'),
-            children: [/*#__PURE__*/_jsxs("div", {
-              style: css(card),
-              children: [/*#__PURE__*/_jsxs("div", {
-                style: css('display:flex; justify-content:space-between; align-items:baseline; margin-bottom:20px;'),
-                children: [/*#__PURE__*/_jsx("span", {
-                  style: css('font-size:14px; font-weight:700; color:#18191f; letter-spacing:-0.01em;'),
-                  children: "Distribusi Desil"
-                }), /*#__PURE__*/_jsx("span", {
-                  style: css('font-size:11px; color:#9ba2b6;'),
-                  children: "keluarga per desil"
-                })]
-              }), /*#__PURE__*/_jsx("div", {
-                style: css('display:flex; align-items:flex-end; gap:6px; height:168px;'),
-                children: V.desilBars.map((bar, i) => /*#__PURE__*/_jsxs("div", {
-                  style: css('flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; justify-content:flex-end; height:100%;'),
-                  children: [/*#__PURE__*/_jsx("span", {
-                    style: css('font-size:11.5px; font-weight:700; color:#18191f;'),
-                    children: bar.count
-                  }), /*#__PURE__*/_jsx("div", {
-                    style: css(bar.barStyle)
-                  }), /*#__PURE__*/_jsx("span", {
-                    style: css(bar.numStyle),
-                    children: bar.desil
-                  })]
-                }, i))
-              }), /*#__PURE__*/_jsxs("div", {
-                style: css('margin-top:14px; padding-top:12px; border-top:1px solid #f0f0ee; font-size:11px; color:#9ba2b6; display:flex; align-items:center; gap:7px;'),
-                children: [/*#__PURE__*/_jsx("span", {
-                  style: css('width:10px;height:10px;border-radius:3px;background:#d8522a;display:inline-block;flex:none;')
-                }), "Desil 1–4 = prioritas penerima bantuan sosial"]
-              })]
-            }), /*#__PURE__*/_jsxs("div", {
-              style: css(card + ' display:flex; flex-direction:column; gap:10px;'),
-              children: [/*#__PURE__*/_jsxs("div", {
-                style: css('display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;'),
-                children: [/*#__PURE__*/_jsx("span", {
-                  style: css('font-size:14px; font-weight:700; color:#18191f; letter-spacing:-0.01em;'),
-                  children: "Perubahan Desil Terbaru"
-                }), /*#__PURE__*/_jsx("span", {
-                  style: css('font-size:11px; color:#9ba2b6;'),
-                  children: "dampak kelayakan bansos"
-                })]
-              }), V.perubahanList.map((p, i) => /*#__PURE__*/_jsxs("div", {
-                style: css(p.rowStyle),
-                children: [/*#__PURE__*/_jsx("div", {
-                  style: css(p.iconStyle),
-                  children: p.icon
-                }), /*#__PURE__*/_jsxs("div", {
-                  style: css('flex:1; min-width:0; display:flex; flex-direction:column; gap:3px;'),
-                  children: [/*#__PURE__*/_jsxs("div", {
-                    style: css('display:flex; align-items:center; justify-content:space-between; gap:8px;'),
-                    children: [/*#__PURE__*/_jsx("span", {
-                      style: css('font-size:13px; font-weight:700; color:#18191f; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;'),
-                      children: p.nama
-                    }), /*#__PURE__*/_jsx("span", {
-                      style: css('font-size:12.5px; font-weight:700; color:#18191f; white-space:nowrap; flex:none;'),
-                      children: p.desilText
-                    })]
-                  }), /*#__PURE__*/_jsx("span", {
-                    style: css(p.dampakStyle),
-                    children: p.dampak
-                  })]
-                })]
-              }, i)), V.tidakAdaPerubahan && /*#__PURE__*/_jsx("div", {
-                style: css('padding:20px; text-align:center; color:#9ba2b6; font-size:13px;'),
-                children: "Belum ada perubahan desil dari update terbaru."
-              })]
-            })]
-          })]
-        }), V.isDaftar && /*#__PURE__*/_jsxs("div", {
-          style: css('display:flex; flex-direction:column; gap:14px; animation:fadein 0.2s ease;'),
-          children: [/*#__PURE__*/_jsxs("div", {
-            style: css('display:flex; flex-wrap:wrap; gap:9px; align-items:center;'),
-            children: [/*#__PURE__*/_jsx("input", {
-              value: V.search,
-              onChange: V.onSearch,
-              placeholder: "Cari NIK, Nama, atau No. KK…",
-              style: css('flex:1; min-width:220px; padding:10px 14px; border:1.5px solid #e0e0de; border-radius:9px; font-family:inherit; font-size:13.5px; background:#fafaf9; color:#18191f;')
-            }), /*#__PURE__*/_jsx("select", {
-              value: V.filterRt,
-              "data-filter": "filterRt",
-              onChange: V.onFilter,
-              style: css('padding:10px 12px; border:1.5px solid #e0e0de; border-radius:9px; font-family:inherit; font-size:13px; background:#fafaf9; color:#18191f; cursor:pointer;'),
-              children: V.rtOptions.map((opt, i) => /*#__PURE__*/_jsx("option", {
-                value: opt.value,
-                children: opt.label
-              }, i))
-            }), /*#__PURE__*/_jsx("select", {
-              value: V.filterDesil,
-              "data-filter": "filterDesil",
-              onChange: V.onFilter,
-              style: css('padding:10px 12px; border:1.5px solid #e0e0de; border-radius:9px; font-family:inherit; font-size:13px; background:#fafaf9; color:#18191f; cursor:pointer;'),
-              children: V.desilFilterOpts.map((opt, i) => /*#__PURE__*/_jsx("option", {
-                value: opt.value,
-                children: opt.label
-              }, i))
-            }), /*#__PURE__*/_jsx("select", {
-              value: V.filterBansos,
-              "data-filter": "filterBansos",
-              onChange: V.onFilter,
-              style: css('padding:10px 12px; border:1.5px solid #e0e0de; border-radius:9px; font-family:inherit; font-size:13px; background:#fafaf9; color:#18191f; cursor:pointer;'),
-              children: V.bansosFilterOpts.map((opt, i) => /*#__PURE__*/_jsx("option", {
-                value: opt.value,
-                children: opt.label
-              }, i))
-            }), /*#__PURE__*/_jsx("button", {
-              onClick: V.onTambah,
-              style: css('display:inline-flex; align-items:center; gap:6px; padding:10px 16px; font-family:inherit; font-size:13.5px; font-weight:700; background:#1e50d0; color:#fff; border:none; border-radius:9px; cursor:pointer; white-space:nowrap;'),
-              children: "+ Tambah Data"
-            })]
-          }), /*#__PURE__*/_jsxs("div", {
-            style: css('background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05); overflow-x:auto;'),
-            children: [/*#__PURE__*/_jsxs("table", {
-              style: css('width:100%; border-collapse:collapse; min-width:720px;'),
-              children: [/*#__PURE__*/_jsx("thead", {
-                children: /*#__PURE__*/_jsxs("tr", {
-                  style: css('background:#fafaf9; border-bottom:1px solid #eeeeed;'),
-                  children: [/*#__PURE__*/_jsx("th", {
-                    style: css(th),
-                    children: "Kepala Keluarga"
-                  }), /*#__PURE__*/_jsx("th", {
-                    style: css(th),
-                    children: "Alamat"
-                  }), /*#__PURE__*/_jsx("th", {
-                    style: css(th),
-                    children: "Pekerjaan"
-                  }), /*#__PURE__*/_jsx("th", {
-                    style: css(th),
-                    children: "Desil"
-                  }), /*#__PURE__*/_jsx("th", {
-                    style: css(th),
-                    children: "Bansos"
-                  }), /*#__PURE__*/_jsx("th", {
-                    style: css(th),
-                    children: "Riwayat"
-                  }), /*#__PURE__*/_jsx("th", {
-                    style: css('text-align:right; padding:12px 16px; font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.06em;'),
-                    children: "Aksi"
-                  })]
-                })
-              }), /*#__PURE__*/_jsx("tbody", {
-                children: V.wargaTampil.map((w, i) => /*#__PURE__*/_jsxs("tr", {
-                  style: css('border-top:1px solid #f0f0ee;'),
-                  onMouseEnter: w.onHover,
-                  onMouseLeave: w.onLeave,
-                  children: [/*#__PURE__*/_jsxs("td", {
-                    style: css('padding:13px 16px; vertical-align:middle;'),
-                    children: [/*#__PURE__*/_jsx("div", {
-                      style: css('font-size:13.5px; font-weight:700; color:#18191f;'),
-                      children: w.nama
-                    }), /*#__PURE__*/_jsx("div", {
-                      style: css('font-size:11px; color:#9ba2b6; margin-top:2px; font-variant-numeric:tabular-nums;'),
-                      children: w.nik
-                    })]
-                  }), /*#__PURE__*/_jsxs("td", {
-                    style: css('padding:13px 16px; vertical-align:middle;'),
-                    children: [/*#__PURE__*/_jsx("div", {
-                      style: css('font-size:13px; font-weight:600; color:#3d4152;'),
-                      children: w.rtRw
-                    }), /*#__PURE__*/_jsx("div", {
-                      style: css('font-size:11px; color:#9ba2b6; margin-top:2px;'),
-                      children: w.dusun
-                    })]
-                  }), /*#__PURE__*/_jsxs("td", {
-                    style: css('padding:13px 16px; vertical-align:middle;'),
-                    children: [/*#__PURE__*/_jsx("div", {
-                      style: css('font-size:13px; font-weight:600; color:#3d4152;'),
-                      children: w.pekerjaan
-                    }), /*#__PURE__*/_jsx("div", {
-                      style: css('font-size:11px; color:#9ba2b6; margin-top:2px; font-variant-numeric:tabular-nums;'),
-                      children: w.penghasilan
-                    })]
-                  }), /*#__PURE__*/_jsx("td", {
-                    style: css('padding:13px 16px; vertical-align:middle;'),
-                    children: /*#__PURE__*/_jsx("span", {
-                      style: css(w.desilBadgeStyle),
-                      children: w.desilLabel
-                    })
-                  }), /*#__PURE__*/_jsx("td", {
-                    style: css('padding:13px 16px; vertical-align:middle;'),
-                    children: /*#__PURE__*/_jsx("span", {
-                      style: css(w.bansosBadgeStyle),
-                      children: w.bansos
-                    })
-                  }), /*#__PURE__*/_jsxs("td", {
-                    style: css('padding:13px 16px; vertical-align:middle;'),
-                    children: [/*#__PURE__*/_jsxs("div", {
-                      style: css('font-size:12px; font-weight:600; color:#3d4152;'),
-                      children: [w.jumlahTanggal, " snapshot"]
-                    }), w.adaPerubahanTerakhir && /*#__PURE__*/_jsx("div", {
-                      style: css('font-size:11px; color:#b45309; font-weight:700; margin-top:2px;'),
-                      children: w.perubahanTerakhirStr
-                    })]
-                  }), /*#__PURE__*/_jsx("td", {
-                    style: css('padding:13px 16px; vertical-align:middle;'),
-                    children: /*#__PURE__*/_jsxs("div", {
-                      style: css('display:flex; gap:6px; justify-content:flex-end;'),
-                      children: [/*#__PURE__*/_jsx("button", {
-                        onClick: w.onLihat,
-                        style: css('padding:7px 12px; font-family:inherit; font-size:12px; font-weight:600; border:1.5px solid #e0e0de; background:#fff; color:#3d4152; border-radius:8px; cursor:pointer;'),
-                        children: "Riwayat"
-                      }), /*#__PURE__*/_jsx("button", {
-                        onClick: w.onEdit,
-                        style: css('padding:7px 12px; font-family:inherit; font-size:12px; font-weight:600; border:none; background:#1e50d0; color:#fff; border-radius:8px; cursor:pointer;'),
-                        children: "Edit"
-                      })]
-                    })
-                  })]
-                }, w.id))
-              })]
-            }), V.kosong && /*#__PURE__*/_jsx("div", {
-              style: css('padding:40px; text-align:center; color:#9ba2b6; font-size:13.5px;'),
-              children: "Tidak ada rumah tangga yang cocok."
-            })]
-          }), /*#__PURE__*/_jsxs("span", {
-            style: css('font-size:12px; color:#9ba2b6;'),
-            children: ["Menampilkan ", V.jumlahTampil, " dari ", V.jumlahTotal, " rumah tangga"]
-          })]
-        }), V.isForm && /*#__PURE__*/_jsxs("div", {
-          style: css('max-width:880px; animation:fadein 0.2s ease;'),
-          children: [/*#__PURE__*/_jsxs("div", {
-            style: css('display:flex; align-items:flex-start; gap:8px; background:#eef2fc; border:1px solid #c7d7f6; border-radius:10px; padding:12px 15px; margin-bottom:18px; font-size:12.5px; color:#1a3f99; line-height:1.5;'),
-            children: [/*#__PURE__*/_jsx("span", {
-              style: css('font-weight:700; white-space:nowrap;'),
-              children: "Snapshot:"
-            }), /*#__PURE__*/_jsxs("span", {
-              children: ["Simpan akan membuat / menimpa snapshot tanggal ", /*#__PURE__*/_jsx("strong", {
-                children: V.tanggalHariIni
-              }), ". Perbedaan dengan hari sebelumnya tercatat otomatis di Riwayat."]
-            })]
-          }), /*#__PURE__*/_jsxs("div", {
-            style: css('display:flex; flex-direction:column; gap:14px;'),
-            children: [/*#__PURE__*/_jsxs("div", {
-              style: css(card),
-              children: [/*#__PURE__*/_jsx("span", {
-                style: css('font-size:13.5px; font-weight:700; color:#18191f; display:block; margin-bottom:18px; padding-bottom:12px; border-bottom:1px solid #f0f0ee;'),
-                children: "1 · Identitas Keluarga"
-              }), /*#__PURE__*/_jsxs("div", {
-                style: css('display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px;'),
-                children: [/*#__PURE__*/_jsxs("div", {
-                  children: [/*#__PURE__*/_jsx("label", {
-                    style: css(lab),
-                    children: "No. Kartu Keluarga"
-                  }), /*#__PURE__*/_jsx("input", {
-                    "data-field": "noKK",
-                    value: V.form.noKK,
-                    onChange: V.onFormChange,
-                    style: css(inp)
-                  })]
-                }), /*#__PURE__*/_jsxs("div", {
-                  children: [/*#__PURE__*/_jsx("label", {
-                    style: css(lab),
-                    children: "NIK Kepala Keluarga"
-                  }), /*#__PURE__*/_jsx("input", {
-                    "data-field": "nik",
-                    value: V.form.nik,
-                    onChange: V.onFormChange,
-                    style: css(inp)
-                  })]
-                }), /*#__PURE__*/_jsxs("div", {
-                  style: css('grid-column:1/-1;'),
-                  children: [/*#__PURE__*/_jsx("label", {
-                    style: css(lab),
-                    children: "Nama Kepala Keluarga"
-                  }), /*#__PURE__*/_jsx("input", {
-                    "data-field": "nama",
-                    value: V.form.nama,
-                    onChange: V.onFormChange,
-                    style: css(inp)
-                  })]
-                }), /*#__PURE__*/_jsxs("div", {
-                  children: [/*#__PURE__*/_jsx("label", {
-                    style: css(lab),
-                    children: "Dusun"
-                  }), /*#__PURE__*/_jsxs("select", {
-                    "data-field": "dusun",
-                    value: V.form.dusun,
-                    onChange: V.onFormChange,
-                    style: css(inpSel),
-                    children: [/*#__PURE__*/_jsx("option", {
-                      children: "Dusun Krajan"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Dusun Ngasem"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Dusun Sukamulya"
-                    })]
-                  })]
-                }), /*#__PURE__*/_jsxs("div", {
-                  style: css('display:grid;grid-template-columns:1fr 1fr;gap:12px;'),
-                  children: [/*#__PURE__*/_jsxs("div", {
-                    children: [/*#__PURE__*/_jsx("label", {
-                      style: css(lab),
-                      children: "RT"
-                    }), /*#__PURE__*/_jsx("input", {
-                      "data-field": "rt",
-                      value: V.form.rt,
-                      onChange: V.onFormChange,
-                      style: css(inp)
-                    })]
-                  }), /*#__PURE__*/_jsxs("div", {
-                    children: [/*#__PURE__*/_jsx("label", {
-                      style: css(lab),
-                      children: "RW"
-                    }), /*#__PURE__*/_jsx("input", {
-                      "data-field": "rw",
-                      value: V.form.rw,
-                      onChange: V.onFormChange,
-                      style: css(inp)
-                    })]
-                  })]
-                }), /*#__PURE__*/_jsxs("div", {
-                  style: css('grid-column:1/-1;'),
-                  children: [/*#__PURE__*/_jsx("label", {
-                    style: css(lab),
-                    children: "Alamat"
-                  }), /*#__PURE__*/_jsx("input", {
-                    "data-field": "alamat",
-                    value: V.form.alamat,
-                    onChange: V.onFormChange,
-                    style: css(inp)
-                  })]
-                }), /*#__PURE__*/_jsxs("div", {
-                  children: [/*#__PURE__*/_jsx("label", {
-                    style: css(lab),
-                    children: "Jumlah Anggota"
-                  }), /*#__PURE__*/_jsx("input", {
-                    type: "number",
-                    "data-field": "jumlahAnggota",
-                    value: V.form.jumlahAnggota,
-                    onChange: V.onFormChange,
-                    style: css(inp)
-                  })]
-                }), /*#__PURE__*/_jsxs("div", {
-                  children: [/*#__PURE__*/_jsx("label", {
-                    style: css(lab),
-                    children: "Status Disabilitas"
-                  }), /*#__PURE__*/_jsxs("select", {
-                    "data-field": "disabilitas",
-                    value: V.form.disabilitas,
-                    onChange: V.onFormChange,
-                    style: css(inpSel),
-                    children: [/*#__PURE__*/_jsx("option", {
-                      children: "Tidak Ada"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Ada"
-                    })]
-                  })]
-                }), /*#__PURE__*/_jsxs("div", {
-                  style: css('grid-column:1/-1;'),
-                  children: [/*#__PURE__*/_jsx("label", {
-                    style: css(lab),
-                    children: "Nama Anggota (pisahkan koma)"
-                  }), /*#__PURE__*/_jsx("input", {
-                    "data-field": "anggotaStr",
-                    value: V.form.anggotaStr,
-                    onChange: V.onFormChange,
-                    style: css(inp)
-                  })]
-                }), /*#__PURE__*/_jsxs("div", {
-                  children: [/*#__PURE__*/_jsx("label", {
-                    style: css(lab),
-                    children: "Pekerjaan"
-                  }), /*#__PURE__*/_jsxs("select", {
-                    "data-field": "pekerjaan",
-                    value: V.form.pekerjaan,
-                    onChange: V.onFormChange,
-                    style: css(inpSel),
-                    children: [/*#__PURE__*/_jsx("option", {
-                      children: "Tidak Bekerja"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Buruh Tani"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Buruh Harian"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Petani"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Pedagang"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Nelayan"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Tukang Bangunan"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Pengrajin"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Sopir"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Guru Honorer"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Wiraswasta"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "PNS"
-                    })]
-                  })]
-                }), /*#__PURE__*/_jsxs("div", {
-                  children: [/*#__PURE__*/_jsx("label", {
-                    style: css(lab),
-                    children: "Pendidikan Terakhir"
-                  }), /*#__PURE__*/_jsxs("select", {
-                    "data-field": "pendidikan",
-                    value: V.form.pendidikan,
-                    onChange: V.onFormChange,
-                    style: css(inpSel),
-                    children: [/*#__PURE__*/_jsx("option", {
-                      children: "Tidak Sekolah"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "SD"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "SMP"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "SMA"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "D3"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "S1"
-                    })]
-                  })]
-                }), /*#__PURE__*/_jsxs("div", {
-                  style: css('grid-column:1/-1;'),
-                  children: [/*#__PURE__*/_jsx("label", {
-                    style: css(lab),
-                    children: "Estimasi Penghasilan Bulanan (Rp)"
-                  }), /*#__PURE__*/_jsx("input", {
-                    type: "number",
-                    "data-field": "penghasilan",
-                    value: V.form.penghasilan,
-                    onChange: V.onFormChange,
-                    style: css(inp)
-                  })]
-                })]
-              })]
-            }), /*#__PURE__*/_jsxs("div", {
-              style: css(card),
-              children: [/*#__PURE__*/_jsx("span", {
-                style: css('font-size:13.5px; font-weight:700; color:#18191f; display:block; margin-bottom:18px; padding-bottom:12px; border-bottom:1px solid #f0f0ee;'),
-                children: "2 · Kondisi Rumah"
-              }), /*#__PURE__*/_jsxs("div", {
-                style: css('display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px;'),
-                children: [/*#__PURE__*/_jsxs("div", {
-                  children: [/*#__PURE__*/_jsx("label", {
-                    style: css(lab),
-                    children: "Status Kepemilikan"
-                  }), /*#__PURE__*/_jsxs("select", {
-                    "data-field": "statusRumah",
-                    value: V.form.statusRumah,
-                    onChange: V.onFormChange,
-                    style: css(inpSel),
-                    children: [/*#__PURE__*/_jsx("option", {
-                      children: "Milik Sendiri"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Sewa/Kontrak"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Numpang"
-                    })]
-                  })]
-                }), /*#__PURE__*/_jsxs("div", {
-                  children: [/*#__PURE__*/_jsx("label", {
-                    style: css(lab),
-                    children: "Lantai"
-                  }), /*#__PURE__*/_jsxs("select", {
-                    "data-field": "lantai",
-                    value: V.form.lantai,
-                    onChange: V.onFormChange,
-                    style: css(inpSel),
-                    children: [/*#__PURE__*/_jsx("option", {
-                      children: "Tanah"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Semen"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Keramik/Ubin"
-                    })]
-                  })]
-                }), /*#__PURE__*/_jsxs("div", {
-                  children: [/*#__PURE__*/_jsx("label", {
-                    style: css(lab),
-                    children: "Dinding"
-                  }), /*#__PURE__*/_jsxs("select", {
-                    "data-field": "dinding",
-                    value: V.form.dinding,
-                    onChange: V.onFormChange,
-                    style: css(inpSel),
-                    children: [/*#__PURE__*/_jsx("option", {
-                      children: "Bambu/Kayu"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Setengah Tembok"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Tembok"
-                    })]
-                  })]
-                }), /*#__PURE__*/_jsxs("div", {
-                  children: [/*#__PURE__*/_jsx("label", {
-                    style: css(lab),
-                    children: "Atap"
-                  }), /*#__PURE__*/_jsxs("select", {
-                    "data-field": "atap",
-                    value: V.form.atap,
-                    onChange: V.onFormChange,
-                    style: css(inpSel),
-                    children: [/*#__PURE__*/_jsx("option", {
-                      children: "Daun/Rumbia"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Seng/Asbes"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Genteng/Beton"
-                    })]
-                  })]
-                }), /*#__PURE__*/_jsxs("div", {
-                  children: [/*#__PURE__*/_jsx("label", {
-                    style: css(lab),
-                    children: "Sumber Air Minum"
-                  }), /*#__PURE__*/_jsxs("select", {
-                    "data-field": "sumberAir",
-                    value: V.form.sumberAir,
-                    onChange: V.onFormChange,
-                    style: css(inpSel),
-                    children: [/*#__PURE__*/_jsx("option", {
-                      children: "Sungai/Hujan"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "Sumur"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "PDAM/Ledeng"
-                    })]
-                  })]
-                }), /*#__PURE__*/_jsxs("div", {
-                  children: [/*#__PURE__*/_jsx("label", {
-                    style: css(lab),
-                    children: "Penerangan"
-                  }), /*#__PURE__*/_jsxs("select", {
-                    "data-field": "penerangan",
-                    value: V.form.penerangan,
-                    onChange: V.onFormChange,
-                    style: css(inpSel),
-                    children: [/*#__PURE__*/_jsx("option", {
-                      children: "Non-PLN"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "PLN 450 VA"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "PLN 900+ VA"
-                    })]
-                  })]
-                })]
-              })]
-            }), /*#__PURE__*/_jsxs("div", {
-              style: css(card),
-              children: [/*#__PURE__*/_jsx("span", {
-                style: css('font-size:13.5px; font-weight:700; color:#18191f; display:block; margin-bottom:18px; padding-bottom:12px; border-bottom:1px solid #f0f0ee;'),
-                children: "3 · Kepemilikan Aset"
-              }), /*#__PURE__*/_jsx("div", {
-                style: css('display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:9px;'),
-                children: V.asetList.map((a, i) => /*#__PURE__*/_jsxs("label", {
-                  style: css(a.labelStyle),
-                  children: [/*#__PURE__*/_jsx("input", {
-                    type: "checkbox",
-                    checked: a.checked,
-                    onChange: a.onToggle,
-                    style: css('width:14px;height:14px;accent-color:#1e50d0;cursor:pointer;flex:none;')
-                  }), a.name]
-                }, i))
-              })]
-            }), /*#__PURE__*/_jsxs("div", {
-              style: css(card),
-              children: [/*#__PURE__*/_jsx("span", {
-                style: css('font-size:13.5px; font-weight:700; color:#18191f; display:block; margin-bottom:5px;'),
-                children: "4 · Foto Rumah"
-              }), /*#__PURE__*/_jsx("span", {
-                style: css('font-size:12px; color:#9ba2b6; display:block; margin-bottom:18px; padding-bottom:12px; border-bottom:1px solid #f0f0ee;'),
-                children: "3 foto wajib · dikompres otomatis di perangkat (≤1024px, target <200KB)"
-              }), /*#__PURE__*/_jsx("div", {
-                style: css('display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:14px;'),
-                children: V.fotoSlots.map((s, i) => /*#__PURE__*/_jsxs("div", {
-                  style: css('display:flex; flex-direction:column; gap:8px;'),
-                  children: [/*#__PURE__*/_jsx("span", {
-                    style: css('font-size:12px; font-weight:600; color:#52576b;'),
-                    children: s.label
-                  }), s.hasFoto && /*#__PURE__*/_jsxs("div", {
-                    children: [/*#__PURE__*/_jsx("div", {
-                      style: css('height:148px; border-radius:10px; overflow:hidden; background:#0c1422;'),
-                      children: /*#__PURE__*/_jsx("img", {
-                        src: s.src,
-                        style: css('width:100%;height:100%;object-fit:cover;display:block;')
-                      })
-                    }), /*#__PURE__*/_jsxs("div", {
-                      style: css('display:flex; justify-content:space-between; align-items:center; margin-top:6px;'),
-                      children: [/*#__PURE__*/_jsxs("span", {
-                        style: css('font-size:10.5px; color:#52576b; font-family:Menlo,monospace;'),
-                        children: [s.beforeStr, " → ", s.afterStr]
-                      }), /*#__PURE__*/_jsx("button", {
-                        onClick: s.onHapus,
-                        style: css('font-size:11.5px; color:#dc2626; background:none; border:none; cursor:pointer; font-weight:700; font-family:inherit; padding:0;'),
-                        children: "Hapus"
-                      })]
-                    }), /*#__PURE__*/_jsxs("span", {
-                      style: css('font-size:11px; color:#16a34a; font-weight:700; display:block; margin-top:3px;'),
-                      children: ["Hemat ", s.ratio]
-                    })]
-                  }), s.kosong && /*#__PURE__*/_jsxs("label", {
-                    style: css('display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;height:148px;border:1.5px dashed #d4d4d0;border-radius:10px;background:repeating-linear-gradient(45deg,#f7f7f5,#f7f7f5 8px,#fafaf9 8px,#fafaf9 16px);cursor:pointer;text-align:center;padding:12px;'),
-                    children: [/*#__PURE__*/_jsx("span", {
-                      style: css('font-size:13px; font-weight:700; color:#52576b;'),
-                      children: "Unggah Foto"
-                    }), /*#__PURE__*/_jsx("span", {
-                      style: css('font-size:10.5px; color:#9ba2b6; font-family:Menlo,monospace;'),
-                      children: "auto-kompres <200 KB"
-                    }), /*#__PURE__*/_jsx("input", {
-                      type: "file",
-                      accept: "image/*",
-                      onChange: s.onUpload,
-                      style: css('display:none;')
-                    })]
-                  })]
-                }, s.key))
-              })]
-            }), /*#__PURE__*/_jsxs("div", {
-              style: css(card),
-              children: [/*#__PURE__*/_jsx("span", {
-                style: css('font-size:13.5px; font-weight:700; color:#18191f; display:block; margin-bottom:18px; padding-bottom:12px; border-bottom:1px solid #f0f0ee;'),
-                children: "5 · Desil Ekonomi & Status Bansos"
-              }), /*#__PURE__*/_jsxs("div", {
-                style: css('display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:20px; align-items:start;'),
-                children: [/*#__PURE__*/_jsxs("div", {
-                  style: css('display:flex; flex-direction:column; gap:12px;'),
-                  children: [/*#__PURE__*/_jsxs("div", {
-                    style: css('display:flex; align-items:center; gap:12px;'),
-                    children: [/*#__PURE__*/_jsx("span", {
-                      style: css(V.formDesilStyle),
-                      children: V.formDesilLabel
-                    }), /*#__PURE__*/_jsx("span", {
-                      style: css('font-size:12px; color:#9ba2b6; font-style:italic;'),
-                      children: V.formDesilHint
-                    })]
-                  }), /*#__PURE__*/_jsxs("label", {
-                    style: css('display:flex; align-items:center; gap:9px; font-size:13px; color:#3d4152; cursor:pointer;'),
-                    children: [/*#__PURE__*/_jsx("input", {
-                      type: "checkbox",
-                      "data-field": "desilManual",
-                      checked: V.form.desilManual,
-                      onChange: V.onFormChange,
-                      style: css('width:15px;height:15px;accent-color:#1e50d0;cursor:pointer;')
-                    }), "Override desil manual"]
-                  }), V.form.desilManual && /*#__PURE__*/_jsxs("div", {
-                    children: [/*#__PURE__*/_jsx("label", {
-                      style: css(lab),
-                      children: "Desil Manual"
-                    }), /*#__PURE__*/_jsxs("select", {
-                      "data-field": "desil",
-                      value: V.form.desil,
-                      onChange: V.onFormChange,
-                      style: css('width:180px;padding:10px 12px;border:1.5px solid #e0e0de;border-radius:9px;font-family:inherit;font-size:14px;color:#18191f;background:#fafaf9;cursor:pointer;'),
-                      children: [/*#__PURE__*/_jsx("option", {
-                        value: "1",
-                        children: "Desil 1"
-                      }), /*#__PURE__*/_jsx("option", {
-                        value: "2",
-                        children: "Desil 2"
-                      }), /*#__PURE__*/_jsx("option", {
-                        value: "3",
-                        children: "Desil 3"
-                      }), /*#__PURE__*/_jsx("option", {
-                        value: "4",
-                        children: "Desil 4"
-                      }), /*#__PURE__*/_jsx("option", {
-                        value: "5",
-                        children: "Desil 5"
-                      }), /*#__PURE__*/_jsx("option", {
-                        value: "6",
-                        children: "Desil 6"
-                      }), /*#__PURE__*/_jsx("option", {
-                        value: "7",
-                        children: "Desil 7"
-                      }), /*#__PURE__*/_jsx("option", {
-                        value: "8",
-                        children: "Desil 8"
-                      }), /*#__PURE__*/_jsx("option", {
-                        value: "9",
-                        children: "Desil 9"
-                      }), /*#__PURE__*/_jsx("option", {
-                        value: "10",
-                        children: "Desil 10"
-                      })]
-                    })]
-                  })]
-                }), /*#__PURE__*/_jsxs("div", {
-                  children: [/*#__PURE__*/_jsx("label", {
-                    style: css(lab),
-                    children: "Status Penerima Bansos"
-                  }), /*#__PURE__*/_jsxs("select", {
-                    "data-field": "bansos",
-                    value: V.form.bansos,
-                    onChange: V.onFormChange,
-                    style: css(inpSel),
-                    children: [/*#__PURE__*/_jsx("option", {
-                      children: "Tidak Ada"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "PKH"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "BPNT"
-                    }), /*#__PURE__*/_jsx("option", {
-                      children: "PKH + BPNT"
-                    })]
-                  })]
-                })]
-              })]
-            })]
-          }), /*#__PURE__*/_jsxs("div", {
-            style: css('display:flex; justify-content:flex-end; gap:10px; margin-top:18px; padding-top:16px;'),
-            children: [/*#__PURE__*/_jsx("button", {
-              onClick: V.onBatal,
-              style: css('padding:11px 20px; font-family:inherit; font-size:13.5px; font-weight:600; border:1.5px solid #e0e0de; background:#fff; color:#3d4152; border-radius:9px; cursor:pointer;'),
-              children: "Batal"
-            }), /*#__PURE__*/_jsx("button", {
-              onClick: V.onSimpan,
-              style: css('padding:11px 24px; font-family:inherit; font-size:13.5px; font-weight:700; border:none; background:#1e50d0; color:#fff; border-radius:9px; cursor:pointer;'),
-              children: "Simpan & Buat Snapshot"
-            })]
-          })]
-        }), V.isRiwayat && V.riwayatWarga && /*#__PURE__*/_jsxs("div", {
-          style: css('display:flex; flex-direction:column; gap:14px; animation:fadein 0.2s ease;'),
-          children: [/*#__PURE__*/_jsx("button", {
-            onClick: V.onKembali,
-            style: css('align-self:flex-start; display:inline-flex; align-items:center; gap:5px; padding:8px 14px; font-family:inherit; font-size:13px; font-weight:600; border:1.5px solid #e0e0de; background:#fff; color:#3d4152; border-radius:8px; cursor:pointer;'),
-            children: "‹ Kembali ke Daftar"
-          }), /*#__PURE__*/_jsxs("div", {
-            style: css('background:#fff; border-radius:14px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05); display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px;'),
-            children: [/*#__PURE__*/_jsxs("div", {
-              children: [/*#__PURE__*/_jsx("div", {
-                style: css('font-size:20px; font-weight:800; color:#18191f; letter-spacing:-0.02em;'),
-                children: V.riwayatWarga.nama
-              }), /*#__PURE__*/_jsxs("div", {
-                style: css('display:flex; flex-wrap:wrap; gap:12px; margin-top:6px;'),
-                children: [/*#__PURE__*/_jsx("span", {
-                  style: css('font-size:12px; color:#9ba2b6; font-variant-numeric:tabular-nums;'),
-                  children: V.riwayatWarga.nik
-                }), /*#__PURE__*/_jsx("span", {
-                  style: css('font-size:12px; color:#9ba2b6; font-variant-numeric:tabular-nums;'),
-                  children: V.riwayatWarga.noKK
-                }), /*#__PURE__*/_jsx("span", {
-                  style: css('font-size:12px; color:#9ba2b6;'),
-                  children: V.riwayatWarga.rtRw
-                })]
-              })]
-            }), /*#__PURE__*/_jsxs("div", {
-              style: css('display:flex; align-items:center; gap:9px; flex-wrap:wrap;'),
-              children: [/*#__PURE__*/_jsx("span", {
-                style: css(V.riwayatWarga.desilStyle),
-                children: V.riwayatWarga.desilLabel
-              }), /*#__PURE__*/_jsx("span", {
-                style: css(V.riwayatWarga.bansosStyle),
-                children: V.riwayatWarga.bansos
-              }), /*#__PURE__*/_jsx("button", {
-                onClick: V.riwayatWarga.onEdit,
-                style: css('padding:9px 16px; font-family:inherit; font-size:13px; font-weight:700; border:none; background:#1e50d0; color:#fff; border-radius:8px; cursor:pointer;'),
-                children: "Edit Data"
-              })]
-            })]
-          }), /*#__PURE__*/_jsxs("div", {
-            style: css('display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; align-items:start;'),
-            children: [/*#__PURE__*/_jsxs("div", {
-              style: css('background:#fff; border-radius:14px; padding:18px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);'),
-              children: [/*#__PURE__*/_jsx("div", {
-                style: css('font-size:13.5px; font-weight:700; color:#18191f; margin-bottom:4px; letter-spacing:-0.01em;'),
-                children: "Linimasa Snapshot"
-              }), /*#__PURE__*/_jsx("div", {
-                style: css('font-size:11px; color:#9ba2b6; margin-bottom:12px;'),
-                children: "satu per hari · klik untuk detail"
-              }), /*#__PURE__*/_jsx("div", {
-                style: css('display:flex; flex-direction:column; gap:3px;'),
-                children: V.snapshotList.map((s, i) => /*#__PURE__*/_jsxs("button", {
-                  onClick: s.onClick,
-                  style: css(s.rowStyle),
-                  children: [/*#__PURE__*/_jsxs("div", {
-                    style: css('display:flex; align-items:center; justify-content:space-between; gap:8px;'),
-                    children: [/*#__PURE__*/_jsx("span", {
-                      style: css('font-size:13px; font-weight:700; color:#18191f;'),
-                      children: s.tanggalStr
-                    }), /*#__PURE__*/_jsx("span", {
-                      style: css(s.desilStyle),
-                      children: s.desilLabel
-                    })]
-                  }), /*#__PURE__*/_jsx("span", {
-                    style: css('font-size:11px; color:#9ba2b6;'),
-                    children: s.operator
-                  }), /*#__PURE__*/_jsx("span", {
-                    style: css(s.metaStyle),
-                    children: s.metaStr
-                  })]
-                }, i))
-              })]
-            }), /*#__PURE__*/_jsxs("div", {
-              style: css('background:#fff; border-radius:14px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05); display:flex; flex-direction:column; gap:16px;'),
-              children: [/*#__PURE__*/_jsxs("div", {
-                style: css('display:flex; justify-content:space-between; align-items:center; gap:10px; padding-bottom:14px; border-bottom:1px solid #f0f0ee;'),
-                children: [/*#__PURE__*/_jsxs("div", {
-                  children: [/*#__PURE__*/_jsx("div", {
-                    style: css('font-size:16px; font-weight:700; color:#18191f; letter-spacing:-0.01em;'),
-                    children: V.selectedSnap.tanggalStr
-                  }), /*#__PURE__*/_jsx("div", {
-                    style: css('font-size:12px; color:#9ba2b6; margin-top:2px;'),
-                    children: V.selectedSnap.operator
-                  })]
-                }), /*#__PURE__*/_jsx("span", {
-                  style: css('font-size:12px; font-weight:700; color:#b45309; background:#fffbeb; border:1px solid #fde68a; padding:5px 12px; border-radius:16px; white-space:nowrap;'),
-                  children: V.selectedSnap.jumlahPerubahan
-                })]
-              }), V.selectedSnap.adaPerubahan && /*#__PURE__*/_jsxs("div", {
-                style: css('display:flex; flex-direction:column; gap:8px;'),
-                children: [/*#__PURE__*/_jsx("span", {
-                  style: css('font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.05em;'),
-                  children: "Field yang berubah"
-                }), V.selectedSnap.diffList.map((d, i) => /*#__PURE__*/_jsxs("div", {
-                  style: css('padding:11px 13px; background:#fffbf0; border:1px solid #edd7a3; border-radius:10px; display:flex; flex-direction:column; gap:5px;'),
-                  children: [/*#__PURE__*/_jsx("span", {
-                    style: css('font-size:10.5px; font-weight:700; color:#92400e; text-transform:uppercase; letter-spacing:0.04em;'),
-                    children: d.label
-                  }), /*#__PURE__*/_jsxs("div", {
-                    style: css('display:flex; align-items:center; gap:9px; font-size:13px; flex-wrap:wrap;'),
-                    children: [/*#__PURE__*/_jsx("span", {
-                      style: css('color:#dc2626; text-decoration:line-through; font-weight:500;'),
-                      children: d.dari
-                    }), /*#__PURE__*/_jsx("span", {
-                      style: css('color:#9ba2b6; font-weight:700;'),
-                      children: "→"
-                    }), /*#__PURE__*/_jsx("span", {
-                      style: css('color:#16a34a; font-weight:700;'),
-                      children: d.ke
-                    })]
-                  })]
-                }, i))]
-              }), V.selectedSnap.snapAwal && /*#__PURE__*/_jsx("div", {
-                style: css('padding:12px 14px; background:#f7f7f5; border-radius:10px; font-size:12.5px; color:#52576b; line-height:1.5;'),
-                children: "Snapshot awal — belum ada pembanding sebelumnya."
-              }), /*#__PURE__*/_jsxs("div", {
-                children: [/*#__PURE__*/_jsx("span", {
-                  style: css('font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.05em; display:block; margin-bottom:9px;'),
-                  children: "Data Lengkap Snapshot"
-                }), /*#__PURE__*/_jsx("div", {
-                  style: css('display:grid; grid-template-columns:1fr 1fr; gap:1px; background:#f0f0ee; border-radius:10px; overflow:hidden;'),
-                  children: V.selectedSnap.dataRows.map((r, i) => /*#__PURE__*/_jsxs("div", {
-                    style: css(r.cellStyle),
-                    children: [/*#__PURE__*/_jsx("span", {
-                      style: css('font-size:11px; color:#9ba2b6; font-weight:600;'),
-                      children: r.label
-                    }), /*#__PURE__*/_jsx("span", {
-                      style: css(r.valueStyle),
-                      children: r.value
-                    })]
-                  }, i))
-                })]
-              }), /*#__PURE__*/_jsxs("div", {
-                children: [/*#__PURE__*/_jsx("span", {
-                  style: css('font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.05em; display:block; margin-bottom:9px;'),
-                  children: "Foto Rumah"
-                }), /*#__PURE__*/_jsx("div", {
-                  style: css('display:grid; grid-template-columns:repeat(3,1fr); gap:10px;'),
-                  children: V.selectedSnap.snapFoto.map((f, i) => /*#__PURE__*/_jsxs("div", {
-                    style: css('display:flex; flex-direction:column; gap:5px;'),
-                    children: [/*#__PURE__*/_jsx("span", {
-                      style: css('font-size:11px; color:#52576b; font-weight:600;'),
-                      children: f.label
-                    }), f.hasFoto && /*#__PURE__*/_jsx("div", {
-                      style: css('height:110px; border-radius:9px; overflow:hidden; background:#0c1422;'),
-                      children: /*#__PURE__*/_jsx("img", {
-                        src: f.src,
-                        style: css('width:100%;height:100%;object-fit:cover;display:block;')
-                      })
-                    }), f.kosong && /*#__PURE__*/_jsx("div", {
-                      style: css('height:110px; border-radius:9px; background:repeating-linear-gradient(45deg,#f5f5f3,#f5f5f3 8px,#fafaf9 8px,#fafaf9 16px); display:flex; align-items:center; justify-content:center; font-size:10.5px; color:#9ba2b6; font-family:Menlo,monospace;'),
-                      children: "belum ada foto"
-                    })]
-                  }, i))
-                })]
-              }), /*#__PURE__*/_jsxs("div", {
-                style: css('border-top:1px solid #f0f0ee; padding-top:16px; display:flex; flex-direction:column; gap:12px;'),
-                children: [/*#__PURE__*/_jsxs("div", {
-                  style: css('display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;'),
-                  children: [/*#__PURE__*/_jsxs("div", {
-                    children: [/*#__PURE__*/_jsx("span", {
-                      style: css('font-size:13px; font-weight:700; color:#18191f;'),
-                      children: "Sanggahan Snapshot Ini"
-                    }), /*#__PURE__*/_jsx("span", {
-                      style: css('font-size:11.5px; color:#9ba2b6; margin-left:8px;'),
-                      children: V.selectedSnap.jumlahSanggahan
-                    })]
-                  }), V.canAjukanSanggahan && /*#__PURE__*/_jsx("button", {
-                    onClick: V.onBukaFormSanggahan,
-                    style: css('padding:7px 13px; font-family:inherit; font-size:12.5px; font-weight:700; border:1.5px solid #1e50d0; background:#eef2fc; color:#1e50d0; border-radius:8px; cursor:pointer; white-space:nowrap;'),
-                    children: "+ Ajukan Sanggahan"
-                  })]
-                }), V.sanggahanForSnap.map((sg, i) => /*#__PURE__*/_jsxs("div", {
-                  style: css(sg.snapCardStyle),
-                  children: [/*#__PURE__*/_jsxs("div", {
-                    style: css('display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;'),
-                    children: [/*#__PURE__*/_jsxs("div", {
-                      style: css('display:flex; flex-direction:column; gap:2px;'),
-                      children: [/*#__PURE__*/_jsx("span", {
-                        style: css('font-size:13px; font-weight:700; color:#18191f;'),
-                        children: sg.pengaju
-                      }), /*#__PURE__*/_jsxs("span", {
-                        style: css('font-size:11.5px; color:#52576b;'),
-                        children: [sg.hubungan, " · ", sg.tanggalPengajuanStr]
-                      })]
-                    }), /*#__PURE__*/_jsx("span", {
-                      style: css(sg.statusStyle),
-                      children: sg.status
-                    })]
-                  }), /*#__PURE__*/_jsx("p", {
-                    style: css('font-size:13px; color:#3d4152; line-height:1.6; margin:8px 0 0;'),
-                    children: sg.alasan
-                  })]
-                }, i)), V.showSanggahanForm && /*#__PURE__*/_jsxs("div", {
-                  style: css('background:#f7f7f5; border:1.5px solid #e0e0de; border-radius:12px; padding:18px; display:flex; flex-direction:column; gap:12px; animation:fadein 0.15s ease;'),
-                  children: [/*#__PURE__*/_jsx("div", {
-                    style: css('font-size:13.5px; font-weight:700; color:#18191f;'),
-                    children: "Formulir Sanggahan"
-                  }), /*#__PURE__*/_jsxs("div", {
-                    style: css('display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px;'),
-                    children: [/*#__PURE__*/_jsxs("div", {
-                      children: [/*#__PURE__*/_jsx("label", {
-                        style: css('display:block;font-size:12px;font-weight:600;color:#52576b;margin-bottom:5px;'),
-                        children: "Nama Pengaju"
-                      }), /*#__PURE__*/_jsx("input", {
-                        "data-sgfield": "pengaju",
-                        value: V.sanggahanForm.pengaju,
-                        onChange: V.onSanggahanChange,
-                        style: css('width:100%;padding:9px 11px;border:1.5px solid #e0e0de;border-radius:8px;font-family:inherit;font-size:13.5px;color:#18191f;background:#fff;')
-                      })]
-                    }), /*#__PURE__*/_jsxs("div", {
-                      children: [/*#__PURE__*/_jsx("label", {
-                        style: css('display:block;font-size:12px;font-weight:600;color:#52576b;margin-bottom:5px;'),
-                        children: "NIK Pengaju"
-                      }), /*#__PURE__*/_jsx("input", {
-                        "data-sgfield": "nik",
-                        value: V.sanggahanForm.nik,
-                        onChange: V.onSanggahanChange,
-                        style: css('width:100%;padding:9px 11px;border:1.5px solid #e0e0de;border-radius:8px;font-family:inherit;font-size:13.5px;color:#18191f;background:#fff;')
-                      })]
-                    }), /*#__PURE__*/_jsxs("div", {
-                      children: [/*#__PURE__*/_jsx("label", {
-                        style: css('display:block;font-size:12px;font-weight:600;color:#52576b;margin-bottom:5px;'),
-                        children: "Hubungan dengan KK"
-                      }), /*#__PURE__*/_jsxs("select", {
-                        "data-sgfield": "hubungan",
-                        value: V.sanggahanForm.hubungan,
-                        onChange: V.onSanggahanChange,
-                        style: css('width:100%;padding:9px 11px;border:1.5px solid #e0e0de;border-radius:8px;font-family:inherit;font-size:13.5px;color:#18191f;background:#fff;cursor:pointer;'),
-                        children: [/*#__PURE__*/_jsx("option", {
-                          children: "Warga Bersangkutan"
-                        }), /*#__PURE__*/_jsx("option", {
-                          children: "Keluarga"
-                        }), /*#__PURE__*/_jsx("option", {
-                          children: "RT/RW"
-                        }), /*#__PURE__*/_jsx("option", {
-                          children: "Kepala Desa"
-                        }), /*#__PURE__*/_jsx("option", {
-                          children: "Pendamping"
-                        })]
-                      })]
-                    })]
-                  }), /*#__PURE__*/_jsxs("div", {
-                    children: [/*#__PURE__*/_jsx("label", {
-                      style: css('display:block;font-size:12px;font-weight:600;color:#52576b;margin-bottom:5px;'),
-                      children: "Alasan Sanggahan"
-                    }), /*#__PURE__*/_jsx("textarea", {
-                      "data-sgfield": "alasan",
-                      value: V.sanggahanForm.alasan,
-                      onChange: V.onSanggahanChange,
-                      style: css('width:100%;padding:9px 11px;border:1.5px solid #e0e0de;border-radius:8px;font-size:13.5px;color:#18191f;background:#fff;height:80px;resize:vertical;line-height:1.6;')
-                    })]
-                  }), /*#__PURE__*/_jsxs("div", {
-                    style: css('display:flex; gap:8px; justify-content:flex-end;'),
-                    children: [/*#__PURE__*/_jsx("button", {
-                      onClick: V.onTutupFormSanggahan,
-                      style: css('padding:9px 16px; font-family:inherit; font-size:13px; font-weight:600; border:1.5px solid #e0e0de; background:#fff; color:#3d4152; border-radius:8px; cursor:pointer;'),
-                      children: "Batal"
-                    }), /*#__PURE__*/_jsx("button", {
-                      onClick: V.onSubmitSanggahan,
-                      style: css('padding:9px 18px; font-family:inherit; font-size:13px; font-weight:700; border:none; background:#1e50d0; color:#fff; border-radius:8px; cursor:pointer;'),
-                      children: "Kirim Sanggahan"
-                    })]
-                  })]
-                })]
-              })]
-            })]
-          })]
-        }), V.isSanggahan && /*#__PURE__*/_jsxs("div", {
-          style: css('display:flex; flex-direction:column; gap:16px; animation:fadein 0.2s ease;'),
-          children: [/*#__PURE__*/_jsxs("div", {
-            style: css('display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;'),
-            children: [/*#__PURE__*/_jsxs("div", {
-              children: [/*#__PURE__*/_jsx("div", {
-                style: css('font-size:20px; font-weight:800; color:#18191f; letter-spacing:-0.02em;'),
-                children: "Daftar Sanggahan"
-              }), /*#__PURE__*/_jsx("div", {
-                style: css('font-size:12.5px; color:#9ba2b6; margin-top:3px;'),
-                children: "Pengajuan keberatan atas perubahan data warga — diproses oleh Operator Desa"
-              })]
-            }), /*#__PURE__*/_jsx("div", {
-              style: css('display:flex; gap:9px; align-items:center; flex-wrap:wrap;'),
-              children: /*#__PURE__*/_jsx("select", {
-                value: V.filterSanggahan,
-                "data-filter": "filterSanggahan",
-                onChange: V.onFilter,
-                style: css('padding:9px 12px; border:1.5px solid #e0e0de; border-radius:9px; font-family:inherit; font-size:13px; background:#fafaf9; color:#18191f; cursor:pointer;'),
-                children: V.sgFilterOpts.map((opt, i) => /*#__PURE__*/_jsx("option", {
-                  value: opt.value,
-                  children: opt.label
-                }, i))
-              })
-            })]
-          }), V.sanggahanListDisplay.map((sg, i) => /*#__PURE__*/_jsxs("div", {
-            style: css('background:#fff; border-radius:14px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05); display:flex; flex-direction:column; gap:14px;'),
-            children: [/*#__PURE__*/_jsxs("div", {
-              style: css('display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;'),
-              children: [/*#__PURE__*/_jsxs("div", {
-                style: css('display:flex; flex-direction:column; gap:5px;'),
-                children: [/*#__PURE__*/_jsxs("div", {
-                  style: css('display:flex; align-items:center; gap:10px; flex-wrap:wrap;'),
-                  children: [/*#__PURE__*/_jsx("span", {
-                    style: css('font-size:15px; font-weight:700; color:#18191f;'),
-                    children: sg.wargaNama
-                  }), /*#__PURE__*/_jsx("span", {
-                    style: css(sg.statusStyle),
-                    children: sg.status
-                  })]
-                }), /*#__PURE__*/_jsxs("div", {
-                  style: css('font-size:12px; color:#9ba2b6;'),
-                  children: ["Snapshot ", /*#__PURE__*/_jsx("strong", {
-                    style: css('color:#52576b;'),
-                    children: sg.tanggalSnapshotStr
-                  }), " · Diajukan ", sg.tanggalPengajuanStr]
-                })]
-              }), /*#__PURE__*/_jsxs("div", {
-                style: css('display:flex; flex-direction:column; gap:2px; text-align:right;'),
-                children: [/*#__PURE__*/_jsx("span", {
-                  style: css('font-size:12.5px; font-weight:700; color:#3d4152;'),
-                  children: sg.pengaju
-                }), /*#__PURE__*/_jsxs("span", {
-                  style: css('font-size:12px; color:#9ba2b6;'),
-                  children: [sg.hubungan, " · ", sg.nik]
-                })]
-              })]
-            }), /*#__PURE__*/_jsx("div", {
-              style: css('background:#fafaf9; border-radius:10px; padding:13px 15px; font-size:13.5px; color:#3d4152; line-height:1.65; border:1px solid #f0f0ee;'),
-              children: sg.alasan
-            }), sg.adaCatatan && /*#__PURE__*/_jsxs("div", {
-              style: css('background:#f0f5f0; border:1px solid #c6e0c6; border-radius:10px; padding:12px 14px; display:flex; flex-direction:column; gap:3px;'),
-              children: [/*#__PURE__*/_jsxs("span", {
-                style: css('font-size:11px; font-weight:700; color:#166534; text-transform:uppercase; letter-spacing:0.05em;'),
-                children: ["Catatan Operator · ", sg.tanggalSelesaiStr]
-              }), /*#__PURE__*/_jsx("span", {
-                style: css('font-size:13px; color:#1c3a1c; line-height:1.6;'),
-                children: sg.catatanOperator
-              })]
-            }), sg.isProcessing && /*#__PURE__*/_jsxs("div", {
-              style: css('background:#f7f7f5; border:1.5px solid #e0e0de; border-radius:11px; padding:14px; display:flex; flex-direction:column; gap:10px; animation:fadein 0.15s ease;'),
-              children: [/*#__PURE__*/_jsx("label", {
-                style: css('display:block; font-size:12px; font-weight:600; color:#52576b; margin-bottom:5px;'),
-                children: "Catatan Penyelesaian (opsional)"
-              }), /*#__PURE__*/_jsx("textarea", {
-                value: sg.processCatatan,
-                onChange: sg.onProcessCatatan,
-                style: css('width:100%; padding:9px 11px; border:1.5px solid #e0e0de; border-radius:8px; font-size:13.5px; color:#18191f; background:#fff; height:72px; resize:vertical; line-height:1.6;')
-              }), /*#__PURE__*/_jsxs("div", {
-                style: css('display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;'),
-                children: [/*#__PURE__*/_jsx("button", {
-                  onClick: sg.onBatalProses,
-                  style: css('padding:8px 14px; font-family:inherit; font-size:12.5px; font-weight:600; border:1.5px solid #e0e0de; background:#fff; color:#3d4152; border-radius:8px; cursor:pointer;'),
-                  children: "Batal"
-                }), /*#__PURE__*/_jsx("button", {
-                  onClick: sg.onTolak,
-                  style: css('padding:8px 14px; font-family:inherit; font-size:12.5px; font-weight:600; border:1.5px solid #fca5a5; background:#fef2f2; color:#b91c1c; border-radius:8px; cursor:pointer;'),
-                  children: "Tolak Sanggahan"
-                }), /*#__PURE__*/_jsx("button", {
-                  onClick: sg.onTerima,
-                  style: css('padding:8px 16px; font-family:inherit; font-size:12.5px; font-weight:700; border:none; background:#16a34a; color:#fff; border-radius:8px; cursor:pointer;'),
-                  children: "Terima Sanggahan"
-                })]
-              })]
-            }), sg.showActions && /*#__PURE__*/_jsxs("div", {
-              style: css('display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding-top:4px; border-top:1px solid #f0f0ee;'),
-              children: [sg.canProses && /*#__PURE__*/_jsxs(React.Fragment, {
-                children: [/*#__PURE__*/_jsx("button", {
-                  onClick: sg.onTandaiProses,
-                  style: css('padding:8px 14px; font-family:inherit; font-size:12.5px; font-weight:600; border:1.5px solid #c7d7f6; background:#eef2fc; color:#1e50d0; border-radius:8px; cursor:pointer;'),
-                  children: "Tandai Diproses"
-                }), /*#__PURE__*/_jsx("button", {
-                  onClick: sg.onTolakLangsung,
-                  style: css('padding:8px 14px; font-family:inherit; font-size:12.5px; font-weight:600; border:1.5px solid #fca5a5; background:#fef2f2; color:#b91c1c; border-radius:8px; cursor:pointer;'),
-                  children: "Tolak"
-                })]
-              }), sg.canSelesai && /*#__PURE__*/_jsx("button", {
-                onClick: sg.onMulaiSelesai,
-                style: css('padding:8px 16px; font-family:inherit; font-size:12.5px; font-weight:700; border:none; background:#1e50d0; color:#fff; border-radius:8px; cursor:pointer;'),
-                children: "Proses & Beri Keputusan"
-              })]
-            })]
-          }, sg.id)), V.sgKosong && /*#__PURE__*/_jsx("div", {
-            style: css('background:#fff; border-radius:14px; padding:48px; text-align:center; color:#9ba2b6; font-size:13.5px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);'),
-            children: "Tidak ada sanggahan yang cocok dengan filter."
-          })]
-        })]
-      }), V.toast && /*#__PURE__*/_jsx("div", {
-        style: css(V.toastStyle),
-        children: V.toast.msg
-      })]
-    });
+    }) => /*#__PURE__*/React.createElement("div", {
+      style: css('background:#fff; border-radius:14px; padding:18px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:11.5px; font-weight:600; color:#9ba2b6;')
+    }, title), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:30px; font-weight:800; color:' + color + '; letter-spacing:-0.03em; margin:5px 0 3px;')
+    }, val), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:11.5px; color:#9ba2b6;')
+    }, sub));
+    return /*#__PURE__*/React.createElement("div", {
+      style: css("min-height:100vh; display:flex; flex-direction:column; background:#f5f5f2; font-family:'Plus Jakarta Sans',system-ui,sans-serif; color:#18191f;")
+    }, /*#__PURE__*/React.createElement("header", {
+      style: css('position:sticky; top:0; z-index:30; background:#fff; border-bottom:1px solid #e8e8e6; height:58px; display:flex; align-items:center; justify-content:space-between; padding:0 20px; gap:14px;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; align-items:center; gap:11px; flex:none;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('width:34px; height:34px; border-radius:9px; background:#1e50d0; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800; color:#fff; letter-spacing:-0.03em; flex:none;')
+    }, "DT"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:15px; font-weight:800; color:#18191f; letter-spacing:-0.02em; line-height:1.2;')
+    }, "DTSEN Desa"), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:11px; color:#9ba2b6; font-weight:500; line-height:1.2;')
+    }, V.namaDesa))), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; align-items:center; gap:10px; flex:none;')
+    }, !V.canCrud && /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11px; font-weight:700; color:#52576b; background:#f0f0ef; border:1px solid #e0e0de; padding:5px 10px; border-radius:20px; white-space:nowrap;')
+    }, "Hanya-Lihat"), V.canCrud && /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        if (window.confirm('Pulihkan data contoh? Semua perubahan tersimpan akan dihapus.')) this.resetStore();
+      },
+      title: "Pulihkan data contoh dan hapus data tersimpan",
+      style: css('font-size:12px; font-weight:600; color:#52576b; background:#f3f3f2; border:1px solid #e8e8e6; padding:5px 11px; border-radius:7px; cursor:pointer; white-space:nowrap;')
+    }, "Reset data"), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; align-items:center; gap:8px; padding-left:10px; border-left:1px solid #e8e8e6;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('width:32px; height:32px; border-radius:50%; background:#eef2fc; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#1e50d0; flex:none;'),
+      title: V.namaOperator
+    }, V.opInitials), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; flex-direction:column; line-height:1.25;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:12.5px; font-weight:700; color:#18191f; white-space:nowrap;')
+    }, V.namaOperator), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:10.5px; color:#9ba2b6; white-space:nowrap;')
+    }, V.roleLabel, V.wilayahLabel ? ' · ' + V.wilayahLabel : ''))), /*#__PURE__*/React.createElement("button", {
+      onClick: () => this.logout(),
+      title: "Keluar",
+      style: css('font-size:12px; font-weight:600; color:#b91c1c; background:#fff; border:1px solid #f0c9c9; padding:6px 11px; border-radius:7px; cursor:pointer; white-space:nowrap;')
+    }, "Keluar"))), /*#__PURE__*/React.createElement("div", {
+      style: css('position:sticky; top:58px; z-index:29; background:#fff; border-bottom:1px solid #e8e8e6; overflow-x:auto; -webkit-overflow-scrolling:touch;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; min-width:max-content; padding:0 20px;')
+    }, V.navItems.map((item, i) => /*#__PURE__*/React.createElement("button", {
+      key: i,
+      onClick: item.onClick,
+      style: css(item.style)
+    }, item.label)))), /*#__PURE__*/React.createElement("main", {
+      style: css('flex:1; padding:24px 20px; max-width:1200px; width:100%; margin:0 auto;')
+    }, V.isDashboard && /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; flex-direction:column; gap:20px; animation:fadein 0.2s ease;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px;')
+    }, /*#__PURE__*/React.createElement(Stat, {
+      title: "Total KK",
+      color: "#18191f",
+      val: V.statTotal,
+      sub: "keluarga terdata"
+    }), /*#__PURE__*/React.createElement(Stat, {
+      title: "Prioritas Bansos",
+      color: "#c2410c",
+      val: V.statPrioritas,
+      sub: "desil 1–4"
+    }), /*#__PURE__*/React.createElement(Stat, {
+      title: "Penerima Bansos",
+      color: "#166534",
+      val: V.statBansos,
+      sub: "PKH / BPNT aktif"
+    }), /*#__PURE__*/React.createElement(Stat, {
+      title: "Perubahan Desil",
+      color: "#b45309",
+      val: V.statPerubahan,
+      sub: "update terbaru"
+    }), /*#__PURE__*/React.createElement(Stat, {
+      title: "Sanggahan Aktif",
+      color: "#d97706",
+      val: V.statSanggahan,
+      sub: "menunggu proses"
+    })), /*#__PURE__*/React.createElement("div", {
+      style: css('display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; align-items:start;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css(card)
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; justify-content:space-between; align-items:baseline; margin-bottom:20px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:14px; font-weight:700; color:#18191f; letter-spacing:-0.01em;')
+    }, "Distribusi Desil"), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11px; color:#9ba2b6;')
+    }, "keluarga per desil")), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; align-items:flex-end; gap:6px; height:168px;')
+    }, V.desilBars.map((bar, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: css('flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; justify-content:flex-end; height:100%;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11.5px; font-weight:700; color:#18191f;')
+    }, bar.count), /*#__PURE__*/React.createElement("div", {
+      style: css(bar.barStyle)
+    }), /*#__PURE__*/React.createElement("span", {
+      style: css(bar.numStyle)
+    }, bar.desil)))), /*#__PURE__*/React.createElement("div", {
+      style: css('margin-top:14px; padding-top:12px; border-top:1px solid #f0f0ee; font-size:11px; color:#9ba2b6; display:flex; align-items:center; gap:7px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('width:10px;height:10px;border-radius:3px;background:#d8522a;display:inline-block;flex:none;')
+    }), "Desil 1–4 = prioritas penerima bantuan sosial")), /*#__PURE__*/React.createElement("div", {
+      style: css(card + ' display:flex; flex-direction:column; gap:10px;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:14px; font-weight:700; color:#18191f; letter-spacing:-0.01em;')
+    }, "Perubahan Desil Terbaru"), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11px; color:#9ba2b6;')
+    }, "dampak kelayakan bansos")), V.perubahanList.map((p, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: css(p.rowStyle)
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css(p.iconStyle)
+    }, p.icon), /*#__PURE__*/React.createElement("div", {
+      style: css('flex:1; min-width:0; display:flex; flex-direction:column; gap:3px;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; align-items:center; justify-content:space-between; gap:8px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:13px; font-weight:700; color:#18191f; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;')
+    }, p.nama), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:12.5px; font-weight:700; color:#18191f; white-space:nowrap; flex:none;')
+    }, p.desilText)), /*#__PURE__*/React.createElement("span", {
+      style: css(p.dampakStyle)
+    }, p.dampak)))), V.tidakAdaPerubahan && /*#__PURE__*/React.createElement("div", {
+      style: css('padding:20px; text-align:center; color:#9ba2b6; font-size:13px;')
+    }, "Belum ada perubahan desil dari update terbaru.")))), V.isDaftar && /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; flex-direction:column; gap:14px; animation:fadein 0.2s ease;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; flex-wrap:wrap; gap:9px; align-items:center;')
+    }, /*#__PURE__*/React.createElement("input", {
+      value: V.search,
+      onChange: V.onSearch,
+      placeholder: "Cari NIK, Nama, atau No. KK…",
+      style: css('flex:1; min-width:220px; padding:10px 14px; border:1.5px solid #e0e0de; border-radius:9px; font-family:inherit; font-size:13.5px; background:#fafaf9; color:#18191f;')
+    }), /*#__PURE__*/React.createElement("select", {
+      value: V.filterRt,
+      "data-filter": "filterRt",
+      onChange: V.onFilter,
+      style: css('padding:10px 12px; border:1.5px solid #e0e0de; border-radius:9px; font-family:inherit; font-size:13px; background:#fafaf9; color:#18191f; cursor:pointer;')
+    }, V.rtOptions.map((opt, i) => /*#__PURE__*/React.createElement("option", {
+      key: i,
+      value: opt.value
+    }, opt.label))), /*#__PURE__*/React.createElement("select", {
+      value: V.filterDesil,
+      "data-filter": "filterDesil",
+      onChange: V.onFilter,
+      style: css('padding:10px 12px; border:1.5px solid #e0e0de; border-radius:9px; font-family:inherit; font-size:13px; background:#fafaf9; color:#18191f; cursor:pointer;')
+    }, V.desilFilterOpts.map((opt, i) => /*#__PURE__*/React.createElement("option", {
+      key: i,
+      value: opt.value
+    }, opt.label))), /*#__PURE__*/React.createElement("select", {
+      value: V.filterBansos,
+      "data-filter": "filterBansos",
+      onChange: V.onFilter,
+      style: css('padding:10px 12px; border:1.5px solid #e0e0de; border-radius:9px; font-family:inherit; font-size:13px; background:#fafaf9; color:#18191f; cursor:pointer;')
+    }, V.bansosFilterOpts.map((opt, i) => /*#__PURE__*/React.createElement("option", {
+      key: i,
+      value: opt.value
+    }, opt.label))), V.canCrud && /*#__PURE__*/React.createElement("button", {
+      onClick: V.onTambah,
+      style: css('display:inline-flex; align-items:center; gap:6px; padding:10px 16px; font-family:inherit; font-size:13.5px; font-weight:700; background:#1e50d0; color:#fff; border:none; border-radius:9px; cursor:pointer; white-space:nowrap;')
+    }, "+ Tambah Data")), /*#__PURE__*/React.createElement("div", {
+      style: css('background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05); overflow-x:auto;')
+    }, /*#__PURE__*/React.createElement("table", {
+      style: css('width:100%; border-collapse:collapse; min-width:720px;')
+    }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
+      style: css('background:#fafaf9; border-bottom:1px solid #eeeeed;')
+    }, /*#__PURE__*/React.createElement("th", {
+      style: css(th)
+    }, "Kepala Keluarga"), /*#__PURE__*/React.createElement("th", {
+      style: css(th)
+    }, "Alamat"), /*#__PURE__*/React.createElement("th", {
+      style: css(th)
+    }, "Pekerjaan"), /*#__PURE__*/React.createElement("th", {
+      style: css(th)
+    }, "Desil"), /*#__PURE__*/React.createElement("th", {
+      style: css(th)
+    }, "Bansos"), /*#__PURE__*/React.createElement("th", {
+      style: css(th)
+    }, "Riwayat"), /*#__PURE__*/React.createElement("th", {
+      style: css('text-align:right; padding:12px 16px; font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.06em;')
+    }, "Aksi"))), /*#__PURE__*/React.createElement("tbody", null, V.wargaTampil.map((w, i) => /*#__PURE__*/React.createElement("tr", {
+      key: w.id,
+      style: css('border-top:1px solid #f0f0ee;'),
+      onMouseEnter: w.onHover,
+      onMouseLeave: w.onLeave
+    }, /*#__PURE__*/React.createElement("td", {
+      style: css('padding:13px 16px; vertical-align:middle;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:13.5px; font-weight:700; color:#18191f;')
+    }, w.nama), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:11px; color:#9ba2b6; margin-top:2px; font-variant-numeric:tabular-nums;')
+    }, w.nik)), /*#__PURE__*/React.createElement("td", {
+      style: css('padding:13px 16px; vertical-align:middle;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:13px; font-weight:600; color:#3d4152;')
+    }, w.rtRw), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:11px; color:#9ba2b6; margin-top:2px;')
+    }, w.dusun)), /*#__PURE__*/React.createElement("td", {
+      style: css('padding:13px 16px; vertical-align:middle;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:13px; font-weight:600; color:#3d4152;')
+    }, w.pekerjaan), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:11px; color:#9ba2b6; margin-top:2px; font-variant-numeric:tabular-nums;')
+    }, w.penghasilan)), /*#__PURE__*/React.createElement("td", {
+      style: css('padding:13px 16px; vertical-align:middle;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css(w.desilBadgeStyle)
+    }, w.desilLabel)), /*#__PURE__*/React.createElement("td", {
+      style: css('padding:13px 16px; vertical-align:middle;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css(w.bansosBadgeStyle)
+    }, w.bansos)), /*#__PURE__*/React.createElement("td", {
+      style: css('padding:13px 16px; vertical-align:middle;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:12px; font-weight:600; color:#3d4152;')
+    }, w.jumlahTanggal, " snapshot"), w.adaPerubahanTerakhir && /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:11px; color:#b45309; font-weight:700; margin-top:2px;')
+    }, w.perubahanTerakhirStr)), /*#__PURE__*/React.createElement("td", {
+      style: css('padding:13px 16px; vertical-align:middle;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; gap:6px; justify-content:flex-end;')
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: w.onLihat,
+      style: css('padding:7px 12px; font-family:inherit; font-size:12px; font-weight:600; border:1.5px solid #e0e0de; background:#fff; color:#3d4152; border-radius:8px; cursor:pointer;')
+    }, "Riwayat"), V.canCrud && /*#__PURE__*/React.createElement("button", {
+      onClick: w.onEdit,
+      style: css('padding:7px 12px; font-family:inherit; font-size:12px; font-weight:600; border:none; background:#1e50d0; color:#fff; border-radius:8px; cursor:pointer;')
+    }, "Edit"))))))), V.kosong && /*#__PURE__*/React.createElement("div", {
+      style: css('padding:40px; text-align:center; color:#9ba2b6; font-size:13.5px;')
+    }, "Tidak ada rumah tangga yang cocok.")), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:12px; color:#9ba2b6;')
+    }, "Menampilkan ", V.jumlahTampil, " dari ", V.jumlahTotal, " rumah tangga")), V.isForm && /*#__PURE__*/React.createElement("div", {
+      style: css('max-width:880px; animation:fadein 0.2s ease;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; align-items:flex-start; gap:8px; background:#eef2fc; border:1px solid #c7d7f6; border-radius:10px; padding:12px 15px; margin-bottom:18px; font-size:12.5px; color:#1a3f99; line-height:1.5;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-weight:700; white-space:nowrap;')
+    }, "Snapshot:"), /*#__PURE__*/React.createElement("span", null, "Simpan akan membuat / menimpa snapshot tanggal ", /*#__PURE__*/React.createElement("strong", null, V.tanggalHariIni), ". Perbedaan dengan hari sebelumnya tercatat otomatis di Riwayat.")), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; flex-direction:column; gap:14px;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css(card)
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:13.5px; font-weight:700; color:#18191f; display:block; margin-bottom:18px; padding-bottom:12px; border-bottom:1px solid #f0f0ee;')
+    }, "1 · Identitas Keluarga"), /*#__PURE__*/React.createElement("div", {
+      style: css('display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px;')
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "No. Kartu Keluarga"), /*#__PURE__*/React.createElement("input", {
+      "data-field": "noKK",
+      value: V.form.noKK,
+      onChange: V.onFormChange,
+      style: css(inp)
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "NIK Kepala Keluarga"), /*#__PURE__*/React.createElement("input", {
+      "data-field": "nik",
+      value: V.form.nik,
+      onChange: V.onFormChange,
+      style: css(inp)
+    })), /*#__PURE__*/React.createElement("div", {
+      style: css('grid-column:1/-1;')
+    }, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Nama Kepala Keluarga"), /*#__PURE__*/React.createElement("input", {
+      "data-field": "nama",
+      value: V.form.nama,
+      onChange: V.onFormChange,
+      style: css(inp)
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Dusun"), /*#__PURE__*/React.createElement("select", {
+      "data-field": "dusun",
+      value: V.form.dusun,
+      onChange: V.onFormChange,
+      style: css(inpSel)
+    }, /*#__PURE__*/React.createElement("option", null, "Dusun Krajan"), /*#__PURE__*/React.createElement("option", null, "Dusun Ngasem"), /*#__PURE__*/React.createElement("option", null, "Dusun Sukamulya"))), /*#__PURE__*/React.createElement("div", {
+      style: css('display:grid;grid-template-columns:1fr 1fr;gap:12px;')
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "RT"), /*#__PURE__*/React.createElement("input", {
+      "data-field": "rt",
+      value: V.form.rt,
+      onChange: V.onFormChange,
+      style: css(inp)
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "RW"), /*#__PURE__*/React.createElement("input", {
+      "data-field": "rw",
+      value: V.form.rw,
+      onChange: V.onFormChange,
+      style: css(inp)
+    }))), /*#__PURE__*/React.createElement("div", {
+      style: css('grid-column:1/-1;')
+    }, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Alamat"), /*#__PURE__*/React.createElement("input", {
+      "data-field": "alamat",
+      value: V.form.alamat,
+      onChange: V.onFormChange,
+      style: css(inp)
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Jumlah Anggota"), /*#__PURE__*/React.createElement("input", {
+      type: "number",
+      "data-field": "jumlahAnggota",
+      value: V.form.jumlahAnggota,
+      onChange: V.onFormChange,
+      style: css(inp)
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Status Disabilitas"), /*#__PURE__*/React.createElement("select", {
+      "data-field": "disabilitas",
+      value: V.form.disabilitas,
+      onChange: V.onFormChange,
+      style: css(inpSel)
+    }, /*#__PURE__*/React.createElement("option", null, "Tidak Ada"), /*#__PURE__*/React.createElement("option", null, "Ada"))), /*#__PURE__*/React.createElement("div", {
+      style: css('grid-column:1/-1;')
+    }, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Nama Anggota (pisahkan koma)"), /*#__PURE__*/React.createElement("input", {
+      "data-field": "anggotaStr",
+      value: V.form.anggotaStr,
+      onChange: V.onFormChange,
+      style: css(inp)
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Pekerjaan"), /*#__PURE__*/React.createElement("select", {
+      "data-field": "pekerjaan",
+      value: V.form.pekerjaan,
+      onChange: V.onFormChange,
+      style: css(inpSel)
+    }, /*#__PURE__*/React.createElement("option", null, "Tidak Bekerja"), /*#__PURE__*/React.createElement("option", null, "Buruh Tani"), /*#__PURE__*/React.createElement("option", null, "Buruh Harian"), /*#__PURE__*/React.createElement("option", null, "Petani"), /*#__PURE__*/React.createElement("option", null, "Pedagang"), /*#__PURE__*/React.createElement("option", null, "Nelayan"), /*#__PURE__*/React.createElement("option", null, "Tukang Bangunan"), /*#__PURE__*/React.createElement("option", null, "Pengrajin"), /*#__PURE__*/React.createElement("option", null, "Sopir"), /*#__PURE__*/React.createElement("option", null, "Guru Honorer"), /*#__PURE__*/React.createElement("option", null, "Wiraswasta"), /*#__PURE__*/React.createElement("option", null, "PNS"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Pendidikan Terakhir"), /*#__PURE__*/React.createElement("select", {
+      "data-field": "pendidikan",
+      value: V.form.pendidikan,
+      onChange: V.onFormChange,
+      style: css(inpSel)
+    }, /*#__PURE__*/React.createElement("option", null, "Tidak Sekolah"), /*#__PURE__*/React.createElement("option", null, "SD"), /*#__PURE__*/React.createElement("option", null, "SMP"), /*#__PURE__*/React.createElement("option", null, "SMA"), /*#__PURE__*/React.createElement("option", null, "D3"), /*#__PURE__*/React.createElement("option", null, "S1"))), /*#__PURE__*/React.createElement("div", {
+      style: css('grid-column:1/-1;')
+    }, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Estimasi Penghasilan Bulanan (Rp)"), /*#__PURE__*/React.createElement("input", {
+      type: "number",
+      "data-field": "penghasilan",
+      value: V.form.penghasilan,
+      onChange: V.onFormChange,
+      style: css(inp)
+    })))), /*#__PURE__*/React.createElement("div", {
+      style: css(card)
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:13.5px; font-weight:700; color:#18191f; display:block; margin-bottom:18px; padding-bottom:12px; border-bottom:1px solid #f0f0ee;')
+    }, "2 · Kondisi Rumah"), /*#__PURE__*/React.createElement("div", {
+      style: css('display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px;')
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Status Kepemilikan"), /*#__PURE__*/React.createElement("select", {
+      "data-field": "statusRumah",
+      value: V.form.statusRumah,
+      onChange: V.onFormChange,
+      style: css(inpSel)
+    }, /*#__PURE__*/React.createElement("option", null, "Milik Sendiri"), /*#__PURE__*/React.createElement("option", null, "Sewa/Kontrak"), /*#__PURE__*/React.createElement("option", null, "Numpang"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Lantai"), /*#__PURE__*/React.createElement("select", {
+      "data-field": "lantai",
+      value: V.form.lantai,
+      onChange: V.onFormChange,
+      style: css(inpSel)
+    }, /*#__PURE__*/React.createElement("option", null, "Tanah"), /*#__PURE__*/React.createElement("option", null, "Semen"), /*#__PURE__*/React.createElement("option", null, "Keramik/Ubin"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Dinding"), /*#__PURE__*/React.createElement("select", {
+      "data-field": "dinding",
+      value: V.form.dinding,
+      onChange: V.onFormChange,
+      style: css(inpSel)
+    }, /*#__PURE__*/React.createElement("option", null, "Bambu/Kayu"), /*#__PURE__*/React.createElement("option", null, "Setengah Tembok"), /*#__PURE__*/React.createElement("option", null, "Tembok"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Atap"), /*#__PURE__*/React.createElement("select", {
+      "data-field": "atap",
+      value: V.form.atap,
+      onChange: V.onFormChange,
+      style: css(inpSel)
+    }, /*#__PURE__*/React.createElement("option", null, "Daun/Rumbia"), /*#__PURE__*/React.createElement("option", null, "Seng/Asbes"), /*#__PURE__*/React.createElement("option", null, "Genteng/Beton"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Sumber Air Minum"), /*#__PURE__*/React.createElement("select", {
+      "data-field": "sumberAir",
+      value: V.form.sumberAir,
+      onChange: V.onFormChange,
+      style: css(inpSel)
+    }, /*#__PURE__*/React.createElement("option", null, "Sungai/Hujan"), /*#__PURE__*/React.createElement("option", null, "Sumur"), /*#__PURE__*/React.createElement("option", null, "PDAM/Ledeng"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Penerangan"), /*#__PURE__*/React.createElement("select", {
+      "data-field": "penerangan",
+      value: V.form.penerangan,
+      onChange: V.onFormChange,
+      style: css(inpSel)
+    }, /*#__PURE__*/React.createElement("option", null, "Non-PLN"), /*#__PURE__*/React.createElement("option", null, "PLN 450 VA"), /*#__PURE__*/React.createElement("option", null, "PLN 900+ VA"))))), /*#__PURE__*/React.createElement("div", {
+      style: css(card)
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:13.5px; font-weight:700; color:#18191f; display:block; margin-bottom:18px; padding-bottom:12px; border-bottom:1px solid #f0f0ee;')
+    }, "3 · Kepemilikan Aset"), /*#__PURE__*/React.createElement("div", {
+      style: css('display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:9px;')
+    }, V.asetList.map((a, i) => /*#__PURE__*/React.createElement("label", {
+      key: i,
+      style: css(a.labelStyle)
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "checkbox",
+      checked: a.checked,
+      onChange: a.onToggle,
+      style: css('width:14px;height:14px;accent-color:#1e50d0;cursor:pointer;flex:none;')
+    }), a.name)))), /*#__PURE__*/React.createElement("div", {
+      style: css(card)
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:13.5px; font-weight:700; color:#18191f; display:block; margin-bottom:5px;')
+    }, "4 · Foto Rumah"), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:12px; color:#9ba2b6; display:block; margin-bottom:18px; padding-bottom:12px; border-bottom:1px solid #f0f0ee;')
+    }, "3 foto wajib · dikompres otomatis di perangkat (≤1024px, target <200KB)"), /*#__PURE__*/React.createElement("div", {
+      style: css('display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:14px;')
+    }, V.fotoSlots.map((s, i) => /*#__PURE__*/React.createElement("div", {
+      key: s.key,
+      style: css('display:flex; flex-direction:column; gap:8px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:12px; font-weight:600; color:#52576b;')
+    }, s.label), s.hasFoto && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: css('height:148px; border-radius:10px; overflow:hidden; background:#0c1422;')
+    }, /*#__PURE__*/React.createElement("img", {
+      src: s.src,
+      style: css('width:100%;height:100%;object-fit:cover;display:block;')
+    })), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; justify-content:space-between; align-items:center; margin-top:6px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:10.5px; color:#52576b; font-family:Menlo,monospace;')
+    }, s.beforeStr, " → ", s.afterStr), /*#__PURE__*/React.createElement("button", {
+      onClick: s.onHapus,
+      style: css('font-size:11.5px; color:#dc2626; background:none; border:none; cursor:pointer; font-weight:700; font-family:inherit; padding:0;')
+    }, "Hapus")), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11px; color:#16a34a; font-weight:700; display:block; margin-top:3px;')
+    }, "Hemat ", s.ratio)), s.kosong && /*#__PURE__*/React.createElement("label", {
+      style: css('display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;height:148px;border:1.5px dashed #d4d4d0;border-radius:10px;background:repeating-linear-gradient(45deg,#f7f7f5,#f7f7f5 8px,#fafaf9 8px,#fafaf9 16px);cursor:pointer;text-align:center;padding:12px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:13px; font-weight:700; color:#52576b;')
+    }, "Unggah Foto"), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:10.5px; color:#9ba2b6; font-family:Menlo,monospace;')
+    }, "auto-kompres <200 KB"), /*#__PURE__*/React.createElement("input", {
+      type: "file",
+      accept: "image/*",
+      onChange: s.onUpload,
+      style: css('display:none;')
+    })))))), /*#__PURE__*/React.createElement("div", {
+      style: css(card)
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:13.5px; font-weight:700; color:#18191f; display:block; margin-bottom:18px; padding-bottom:12px; border-bottom:1px solid #f0f0ee;')
+    }, "5 · Desil Ekonomi & Status Bansos"), /*#__PURE__*/React.createElement("div", {
+      style: css('display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:20px; align-items:start;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; flex-direction:column; gap:12px;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; align-items:center; gap:12px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css(V.formDesilStyle)
+    }, V.formDesilLabel), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:12px; color:#9ba2b6; font-style:italic;')
+    }, V.formDesilHint)), /*#__PURE__*/React.createElement("label", {
+      style: css('display:flex; align-items:center; gap:9px; font-size:13px; color:#3d4152; cursor:pointer;')
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "checkbox",
+      "data-field": "desilManual",
+      checked: V.form.desilManual,
+      onChange: V.onFormChange,
+      style: css('width:15px;height:15px;accent-color:#1e50d0;cursor:pointer;')
+    }), "Override desil manual"), V.form.desilManual && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Desil Manual"), /*#__PURE__*/React.createElement("select", {
+      "data-field": "desil",
+      value: V.form.desil,
+      onChange: V.onFormChange,
+      style: css('width:180px;padding:10px 12px;border:1.5px solid #e0e0de;border-radius:9px;font-family:inherit;font-size:14px;color:#18191f;background:#fafaf9;cursor:pointer;')
+    }, /*#__PURE__*/React.createElement("option", {
+      value: "1"
+    }, "Desil 1"), /*#__PURE__*/React.createElement("option", {
+      value: "2"
+    }, "Desil 2"), /*#__PURE__*/React.createElement("option", {
+      value: "3"
+    }, "Desil 3"), /*#__PURE__*/React.createElement("option", {
+      value: "4"
+    }, "Desil 4"), /*#__PURE__*/React.createElement("option", {
+      value: "5"
+    }, "Desil 5"), /*#__PURE__*/React.createElement("option", {
+      value: "6"
+    }, "Desil 6"), /*#__PURE__*/React.createElement("option", {
+      value: "7"
+    }, "Desil 7"), /*#__PURE__*/React.createElement("option", {
+      value: "8"
+    }, "Desil 8"), /*#__PURE__*/React.createElement("option", {
+      value: "9"
+    }, "Desil 9"), /*#__PURE__*/React.createElement("option", {
+      value: "10"
+    }, "Desil 10")))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Status Penerima Bansos"), /*#__PURE__*/React.createElement("select", {
+      "data-field": "bansos",
+      value: V.form.bansos,
+      onChange: V.onFormChange,
+      style: css(inpSel)
+    }, /*#__PURE__*/React.createElement("option", null, "Tidak Ada"), /*#__PURE__*/React.createElement("option", null, "PKH"), /*#__PURE__*/React.createElement("option", null, "BPNT"), /*#__PURE__*/React.createElement("option", null, "PKH + BPNT")))))), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; justify-content:flex-end; gap:10px; margin-top:18px; padding-top:16px;')
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: V.onBatal,
+      style: css('padding:11px 20px; font-family:inherit; font-size:13.5px; font-weight:600; border:1.5px solid #e0e0de; background:#fff; color:#3d4152; border-radius:9px; cursor:pointer;')
+    }, "Batal"), /*#__PURE__*/React.createElement("button", {
+      onClick: V.onSimpan,
+      style: css('padding:11px 24px; font-family:inherit; font-size:13.5px; font-weight:700; border:none; background:#1e50d0; color:#fff; border-radius:9px; cursor:pointer;')
+    }, "Simpan & Buat Snapshot"))), V.isRiwayat && V.riwayatWarga && /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; flex-direction:column; gap:14px; animation:fadein 0.2s ease;')
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: V.onKembali,
+      style: css('align-self:flex-start; display:inline-flex; align-items:center; gap:5px; padding:8px 14px; font-family:inherit; font-size:13px; font-weight:600; border:1.5px solid #e0e0de; background:#fff; color:#3d4152; border-radius:8px; cursor:pointer;')
+    }, "‹ Kembali ke Daftar"), /*#__PURE__*/React.createElement("div", {
+      style: css('background:#fff; border-radius:14px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05); display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px;')
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:20px; font-weight:800; color:#18191f; letter-spacing:-0.02em;')
+    }, V.riwayatWarga.nama), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; flex-wrap:wrap; gap:12px; margin-top:6px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:12px; color:#9ba2b6; font-variant-numeric:tabular-nums;')
+    }, V.riwayatWarga.nik), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:12px; color:#9ba2b6; font-variant-numeric:tabular-nums;')
+    }, V.riwayatWarga.noKK), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:12px; color:#9ba2b6;')
+    }, V.riwayatWarga.rtRw))), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; align-items:center; gap:9px; flex-wrap:wrap;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css(V.riwayatWarga.desilStyle)
+    }, V.riwayatWarga.desilLabel), /*#__PURE__*/React.createElement("span", {
+      style: css(V.riwayatWarga.bansosStyle)
+    }, V.riwayatWarga.bansos), V.canCrud && /*#__PURE__*/React.createElement("button", {
+      onClick: V.riwayatWarga.onEdit,
+      style: css('padding:9px 16px; font-family:inherit; font-size:13px; font-weight:700; border:none; background:#1e50d0; color:#fff; border-radius:8px; cursor:pointer;')
+    }, "Edit Data"))), /*#__PURE__*/React.createElement("div", {
+      style: css('display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; align-items:start;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('background:#fff; border-radius:14px; padding:18px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:13.5px; font-weight:700; color:#18191f; margin-bottom:4px; letter-spacing:-0.01em;')
+    }, "Linimasa Snapshot"), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:11px; color:#9ba2b6; margin-bottom:12px;')
+    }, "satu per hari · klik untuk detail"), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; flex-direction:column; gap:3px;')
+    }, V.snapshotList.map((s, i) => /*#__PURE__*/React.createElement("button", {
+      key: i,
+      onClick: s.onClick,
+      style: css(s.rowStyle)
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; align-items:center; justify-content:space-between; gap:8px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:13px; font-weight:700; color:#18191f;')
+    }, s.tanggalStr), /*#__PURE__*/React.createElement("span", {
+      style: css(s.desilStyle)
+    }, s.desilLabel)), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11px; color:#9ba2b6;')
+    }, s.operator), /*#__PURE__*/React.createElement("span", {
+      style: css(s.metaStyle)
+    }, s.metaStr))))), /*#__PURE__*/React.createElement("div", {
+      style: css('background:#fff; border-radius:14px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05); display:flex; flex-direction:column; gap:16px;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; justify-content:space-between; align-items:center; gap:10px; padding-bottom:14px; border-bottom:1px solid #f0f0ee;')
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:16px; font-weight:700; color:#18191f; letter-spacing:-0.01em;')
+    }, V.selectedSnap.tanggalStr), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:12px; color:#9ba2b6; margin-top:2px;')
+    }, V.selectedSnap.operator)), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:12px; font-weight:700; color:#b45309; background:#fffbeb; border:1px solid #fde68a; padding:5px 12px; border-radius:16px; white-space:nowrap;')
+    }, V.selectedSnap.jumlahPerubahan)), V.selectedSnap.adaPerubahan && /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; flex-direction:column; gap:8px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.05em;')
+    }, "Field yang berubah"), V.selectedSnap.diffList.map((d, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: css('padding:11px 13px; background:#fffbf0; border:1px solid #edd7a3; border-radius:10px; display:flex; flex-direction:column; gap:5px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:10.5px; font-weight:700; color:#92400e; text-transform:uppercase; letter-spacing:0.04em;')
+    }, d.label), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; align-items:center; gap:9px; font-size:13px; flex-wrap:wrap;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('color:#dc2626; text-decoration:line-through; font-weight:500;')
+    }, d.dari), /*#__PURE__*/React.createElement("span", {
+      style: css('color:#9ba2b6; font-weight:700;')
+    }, "→"), /*#__PURE__*/React.createElement("span", {
+      style: css('color:#16a34a; font-weight:700;')
+    }, d.ke))))), V.selectedSnap.snapAwal && /*#__PURE__*/React.createElement("div", {
+      style: css('padding:12px 14px; background:#f7f7f5; border-radius:10px; font-size:12.5px; color:#52576b; line-height:1.5;')
+    }, "Snapshot awal — belum ada pembanding sebelumnya."), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.05em; display:block; margin-bottom:9px;')
+    }, "Data Lengkap Snapshot"), /*#__PURE__*/React.createElement("div", {
+      style: css('display:grid; grid-template-columns:1fr 1fr; gap:1px; background:#f0f0ee; border-radius:10px; overflow:hidden;')
+    }, V.selectedSnap.dataRows.map((r, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: css(r.cellStyle)
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11px; color:#9ba2b6; font-weight:600;')
+    }, r.label), /*#__PURE__*/React.createElement("span", {
+      style: css(r.valueStyle)
+    }, r.value))))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.05em; display:block; margin-bottom:9px;')
+    }, "Foto Rumah"), /*#__PURE__*/React.createElement("div", {
+      style: css('display:grid; grid-template-columns:repeat(3,1fr); gap:10px;')
+    }, V.selectedSnap.snapFoto.map((f, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: css('display:flex; flex-direction:column; gap:5px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11px; color:#52576b; font-weight:600;')
+    }, f.label), f.hasFoto && /*#__PURE__*/React.createElement("div", {
+      style: css('height:110px; border-radius:9px; overflow:hidden; background:#0c1422;')
+    }, /*#__PURE__*/React.createElement("img", {
+      src: f.src,
+      style: css('width:100%;height:100%;object-fit:cover;display:block;')
+    })), f.kosong && /*#__PURE__*/React.createElement("div", {
+      style: css('height:110px; border-radius:9px; background:repeating-linear-gradient(45deg,#f5f5f3,#f5f5f3 8px,#fafaf9 8px,#fafaf9 16px); display:flex; align-items:center; justify-content:center; font-size:10.5px; color:#9ba2b6; font-family:Menlo,monospace;')
+    }, "belum ada foto"))))), /*#__PURE__*/React.createElement("div", {
+      style: css('border-top:1px solid #f0f0ee; padding-top:16px; display:flex; flex-direction:column; gap:12px;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;')
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:13px; font-weight:700; color:#18191f;')
+    }, "Sanggahan Snapshot Ini"), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11.5px; color:#9ba2b6; margin-left:8px;')
+    }, V.selectedSnap.jumlahSanggahan)), V.canCrud && V.canAjukanSanggahan && /*#__PURE__*/React.createElement("button", {
+      onClick: V.onBukaFormSanggahan,
+      style: css('padding:7px 13px; font-family:inherit; font-size:12.5px; font-weight:700; border:1.5px solid #1e50d0; background:#eef2fc; color:#1e50d0; border-radius:8px; cursor:pointer; white-space:nowrap;')
+    }, "+ Ajukan Sanggahan")), V.sanggahanForSnap.map((sg, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: css(sg.snapCardStyle)
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; flex-direction:column; gap:2px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:13px; font-weight:700; color:#18191f;')
+    }, sg.pengaju), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11.5px; color:#52576b;')
+    }, sg.hubungan, " · ", sg.tanggalPengajuanStr)), /*#__PURE__*/React.createElement("span", {
+      style: css(sg.statusStyle)
+    }, sg.status)), /*#__PURE__*/React.createElement("p", {
+      style: css('font-size:13px; color:#3d4152; line-height:1.6; margin:8px 0 0;')
+    }, sg.alasan))), V.showSanggahanForm && /*#__PURE__*/React.createElement("div", {
+      style: css('background:#f7f7f5; border:1.5px solid #e0e0de; border-radius:12px; padding:18px; display:flex; flex-direction:column; gap:12px; animation:fadein 0.15s ease;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:13.5px; font-weight:700; color:#18191f;')
+    }, "Formulir Sanggahan"), /*#__PURE__*/React.createElement("div", {
+      style: css('display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px;')
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css('display:block;font-size:12px;font-weight:600;color:#52576b;margin-bottom:5px;')
+    }, "Nama Pengaju"), /*#__PURE__*/React.createElement("input", {
+      "data-sgfield": "pengaju",
+      value: V.sanggahanForm.pengaju,
+      onChange: V.onSanggahanChange,
+      style: css('width:100%;padding:9px 11px;border:1.5px solid #e0e0de;border-radius:8px;font-family:inherit;font-size:13.5px;color:#18191f;background:#fff;')
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css('display:block;font-size:12px;font-weight:600;color:#52576b;margin-bottom:5px;')
+    }, "NIK Pengaju"), /*#__PURE__*/React.createElement("input", {
+      "data-sgfield": "nik",
+      value: V.sanggahanForm.nik,
+      onChange: V.onSanggahanChange,
+      style: css('width:100%;padding:9px 11px;border:1.5px solid #e0e0de;border-radius:8px;font-family:inherit;font-size:13.5px;color:#18191f;background:#fff;')
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css('display:block;font-size:12px;font-weight:600;color:#52576b;margin-bottom:5px;')
+    }, "Hubungan dengan KK"), /*#__PURE__*/React.createElement("select", {
+      "data-sgfield": "hubungan",
+      value: V.sanggahanForm.hubungan,
+      onChange: V.onSanggahanChange,
+      style: css('width:100%;padding:9px 11px;border:1.5px solid #e0e0de;border-radius:8px;font-family:inherit;font-size:13.5px;color:#18191f;background:#fff;cursor:pointer;')
+    }, /*#__PURE__*/React.createElement("option", null, "Warga Bersangkutan"), /*#__PURE__*/React.createElement("option", null, "Keluarga"), /*#__PURE__*/React.createElement("option", null, "RT/RW"), /*#__PURE__*/React.createElement("option", null, "Kepala Desa"), /*#__PURE__*/React.createElement("option", null, "Pendamping")))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css('display:block;font-size:12px;font-weight:600;color:#52576b;margin-bottom:5px;')
+    }, "Alasan Sanggahan"), /*#__PURE__*/React.createElement("textarea", {
+      "data-sgfield": "alasan",
+      value: V.sanggahanForm.alasan,
+      onChange: V.onSanggahanChange,
+      style: css('width:100%;padding:9px 11px;border:1.5px solid #e0e0de;border-radius:8px;font-size:13.5px;color:#18191f;background:#fff;height:80px;resize:vertical;line-height:1.6;')
+    })), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; gap:8px; justify-content:flex-end;')
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: V.onTutupFormSanggahan,
+      style: css('padding:9px 16px; font-family:inherit; font-size:13px; font-weight:600; border:1.5px solid #e0e0de; background:#fff; color:#3d4152; border-radius:8px; cursor:pointer;')
+    }, "Batal"), /*#__PURE__*/React.createElement("button", {
+      onClick: V.onSubmitSanggahan,
+      style: css('padding:9px 18px; font-family:inherit; font-size:13px; font-weight:700; border:none; background:#1e50d0; color:#fff; border-radius:8px; cursor:pointer;')
+    }, "Kirim Sanggahan"))))))), V.isSanggahan && /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; flex-direction:column; gap:16px; animation:fadein 0.2s ease;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;')
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:20px; font-weight:800; color:#18191f; letter-spacing:-0.02em;')
+    }, "Daftar Sanggahan"), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:12.5px; color:#9ba2b6; margin-top:3px;')
+    }, "Pengajuan keberatan atas perubahan data warga — diproses oleh Operator Desa")), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; gap:9px; align-items:center; flex-wrap:wrap;')
+    }, /*#__PURE__*/React.createElement("select", {
+      value: V.filterSanggahan,
+      "data-filter": "filterSanggahan",
+      onChange: V.onFilter,
+      style: css('padding:9px 12px; border:1.5px solid #e0e0de; border-radius:9px; font-family:inherit; font-size:13px; background:#fafaf9; color:#18191f; cursor:pointer;')
+    }, V.sgFilterOpts.map((opt, i) => /*#__PURE__*/React.createElement("option", {
+      key: i,
+      value: opt.value
+    }, opt.label))))), V.sanggahanListDisplay.map((sg, i) => /*#__PURE__*/React.createElement("div", {
+      key: sg.id,
+      style: css('background:#fff; border-radius:14px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05); display:flex; flex-direction:column; gap:14px;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; flex-direction:column; gap:5px;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; align-items:center; gap:10px; flex-wrap:wrap;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:15px; font-weight:700; color:#18191f;')
+    }, sg.wargaNama), /*#__PURE__*/React.createElement("span", {
+      style: css(sg.statusStyle)
+    }, sg.status)), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:12px; color:#9ba2b6;')
+    }, "Snapshot ", /*#__PURE__*/React.createElement("strong", {
+      style: css('color:#52576b;')
+    }, sg.tanggalSnapshotStr), " · Diajukan ", sg.tanggalPengajuanStr)), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; flex-direction:column; gap:2px; text-align:right;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:12.5px; font-weight:700; color:#3d4152;')
+    }, sg.pengaju), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:12px; color:#9ba2b6;')
+    }, sg.hubungan, " · ", sg.nik))), /*#__PURE__*/React.createElement("div", {
+      style: css('background:#fafaf9; border-radius:10px; padding:13px 15px; font-size:13.5px; color:#3d4152; line-height:1.65; border:1px solid #f0f0ee;')
+    }, sg.alasan), sg.adaCatatan && /*#__PURE__*/React.createElement("div", {
+      style: css('background:#f0f5f0; border:1px solid #c6e0c6; border-radius:10px; padding:12px 14px; display:flex; flex-direction:column; gap:3px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11px; font-weight:700; color:#166534; text-transform:uppercase; letter-spacing:0.05em;')
+    }, "Catatan Operator · ", sg.tanggalSelesaiStr), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:13px; color:#1c3a1c; line-height:1.6;')
+    }, sg.catatanOperator)), V.canCrud && sg.isProcessing && /*#__PURE__*/React.createElement("div", {
+      style: css('background:#f7f7f5; border:1.5px solid #e0e0de; border-radius:11px; padding:14px; display:flex; flex-direction:column; gap:10px; animation:fadein 0.15s ease;')
+    }, /*#__PURE__*/React.createElement("label", {
+      style: css('display:block; font-size:12px; font-weight:600; color:#52576b; margin-bottom:5px;')
+    }, "Catatan Penyelesaian (opsional)"), /*#__PURE__*/React.createElement("textarea", {
+      value: sg.processCatatan,
+      onChange: sg.onProcessCatatan,
+      style: css('width:100%; padding:9px 11px; border:1.5px solid #e0e0de; border-radius:8px; font-size:13.5px; color:#18191f; background:#fff; height:72px; resize:vertical; line-height:1.6;')
+    }), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;')
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: sg.onBatalProses,
+      style: css('padding:8px 14px; font-family:inherit; font-size:12.5px; font-weight:600; border:1.5px solid #e0e0de; background:#fff; color:#3d4152; border-radius:8px; cursor:pointer;')
+    }, "Batal"), /*#__PURE__*/React.createElement("button", {
+      onClick: sg.onTolak,
+      style: css('padding:8px 14px; font-family:inherit; font-size:12.5px; font-weight:600; border:1.5px solid #fca5a5; background:#fef2f2; color:#b91c1c; border-radius:8px; cursor:pointer;')
+    }, "Tolak Sanggahan"), /*#__PURE__*/React.createElement("button", {
+      onClick: sg.onTerima,
+      style: css('padding:8px 16px; font-family:inherit; font-size:12.5px; font-weight:700; border:none; background:#16a34a; color:#fff; border-radius:8px; cursor:pointer;')
+    }, "Terima Sanggahan"))), V.canCrud && sg.showActions && /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding-top:4px; border-top:1px solid #f0f0ee;')
+    }, sg.canProses && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+      onClick: sg.onTandaiProses,
+      style: css('padding:8px 14px; font-family:inherit; font-size:12.5px; font-weight:600; border:1.5px solid #c7d7f6; background:#eef2fc; color:#1e50d0; border-radius:8px; cursor:pointer;')
+    }, "Tandai Diproses"), /*#__PURE__*/React.createElement("button", {
+      onClick: sg.onTolakLangsung,
+      style: css('padding:8px 14px; font-family:inherit; font-size:12.5px; font-weight:600; border:1.5px solid #fca5a5; background:#fef2f2; color:#b91c1c; border-radius:8px; cursor:pointer;')
+    }, "Tolak")), sg.canSelesai && /*#__PURE__*/React.createElement("button", {
+      onClick: sg.onMulaiSelesai,
+      style: css('padding:8px 16px; font-family:inherit; font-size:12.5px; font-weight:700; border:none; background:#1e50d0; color:#fff; border-radius:8px; cursor:pointer;')
+    }, "Proses & Beri Keputusan")))), V.sgKosong && /*#__PURE__*/React.createElement("div", {
+      style: css('background:#fff; border-radius:14px; padding:48px; text-align:center; color:#9ba2b6; font-size:13.5px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);')
+    }, "Tidak ada sanggahan yang cocok dengan filter."))), V.toast && /*#__PURE__*/React.createElement("div", {
+      style: css(V.toastStyle)
+    }, V.toast.msg));
   }
 }
 const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(/*#__PURE__*/_jsx(Component, {
+root.render(/*#__PURE__*/React.createElement(Component, {
   namaDesa: "Desa Sukamaju",
   namaOperator: "Budi Santoso"
 }));

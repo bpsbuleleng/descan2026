@@ -1,0 +1,27 @@
+{
+  "name": "descan2026",
+  "version": "1.0.0",
+  "description": "",
+  "main": "build.js",
+  "private": true,
+  "scripts": {
+    "build": "node build.js",
+    "test": "node --test",
+    "pretest": "node build.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bpsbuleleng/descan2026.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/bpsbuleleng/descan2026/issues"
+  },
+  "homepage": "https://github.com/bpsbuleleng/descan2026#readme",
+  "devDependencies": {
+    "@babel/standalone": "^8.0.2"
+  }
+}
