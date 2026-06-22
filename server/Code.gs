@@ -15,7 +15,7 @@
 
 var SHEETS = { USERS: 'Users', WARGA: 'Warga', SANGGAHAN: 'Sanggahan', META: 'Meta' };
 
-var WARGA_COLS = ['id','noKK','nik','nama','dusun','rt','rw','alamat','desil','bansos','updatedAt','dataJson'];
+var WARGA_COLS = ['id','noKK','nik','nama','dusun','rt','rw','alamat','desil','bansos','updatedAt','dataJson','status'];
 var SANGGAHAN_COLS = ['id','wargaId','tanggalSnapshot','pengaju','nik','hubungan','alasan','status','tanggalPengajuan','tanggalSelesai','catatanOperator'];
 var USER_COLS = ['username','password','nama','role','wilayah'];
 
@@ -31,6 +31,7 @@ function handle(e) {
   } catch (err) { return json({ ok: false, error: 'Body bukan JSON yang valid.' }); }
 
   ensureSetup();
+  ensureWargaHeader();   // migrasi ringan: pastikan kolom (mis. 'status') ada di sheet lama
   var action = req.action || '';
   try {
     if (action === 'ping')             return json({ ok: true, time: new Date().toISOString() });
@@ -144,19 +145,20 @@ function actionUpdateSanggahan(p) {
   return { ok: true };
 }
 
+function stripFoto(fotoObj) {
+  if (!fotoObj) return;
+  Object.keys(fotoObj).forEach(function(k){
+    var f = fotoObj[k];
+    if (f && f.src) fotoObj[k] = { has: true, before: f.before, after: f.after };
+  });
+}
 function toWargaRow(w) {
   // Foto base64 dilepas dari dataJson agar muat di sel (batas 50.000 char).
   var slim = JSON.parse(JSON.stringify(w));
-  if (Array.isArray(slim.snapshots)) {
-    slim.snapshots.forEach(function(sn){
-      if (sn && sn.foto) Object.keys(sn.foto).forEach(function(k){
-        var f = sn.foto[k];
-        if (f && f.src) sn.foto[k] = { has: true, before: f.before, after: f.after };
-      });
-    });
-  }
+  if (Array.isArray(slim.snapshots)) slim.snapshots.forEach(function(sn){ if (sn) stripFoto(sn.foto); });
+  if (slim.rumah) stripFoto(slim.rumah.foto);  // foto Blok II (R21) juga di-strip
   return [w.id, w.noKK, w.nik, w.nama, w.dusun, w.rt, w.rw, w.alamat,
-          w.desil, w.bansos, today(), JSON.stringify(slim)];
+          w.desil, w.bansos, today(), JSON.stringify(slim), w.status || 'final'];
 }
 
 // ---- Sheet helpers ---------------------------------------------------------
@@ -216,6 +218,18 @@ function writeHeader(name, cols) {
   if (sh.getLastRow() === 0) sh.getRange(1, 1, 1, cols.length).setValues([cols]);
 }
 
+// Migrasi ringan untuk sheet Warga yang sudah ter-deploy sebelum kolom baru
+// (mis. 'status') ditambahkan: pastikan baris header cocok dengan WARGA_COLS.
+function ensureWargaHeader() {
+  var sh = sheet(SHEETS.WARGA);
+  if (sh.getLastRow() === 0) return;
+  var width = Math.max(sh.getLastColumn(), WARGA_COLS.length);
+  var hdr = sh.getRange(1, 1, 1, width).getValues()[0];
+  var changed = false;
+  for (var i = 0; i < WARGA_COLS.length; i++) { if (hdr[i] !== WARGA_COLS[i]) { hdr[i] = WARGA_COLS[i]; changed = true; } }
+  if (changed) sh.getRange(1, 1, 1, WARGA_COLS.length).setValues([hdr.slice(0, WARGA_COLS.length)]);
+}
+
 function seedUsers() {
   var sh = sheet(SHEETS.USERS);
   if (sh.getLastRow() > 1) return;
@@ -231,6 +245,29 @@ function seedUsers() {
   sh.getRange(2, 1, rows.length, USER_COLS.length).setValues(rows);
 }
 
+// Bangun blok terstruktur FASIH (ringkas) untuk satu KK seed — agar saat dibuka
+// di aplikasi (mode server) form tidak kosong. Detail penuh tetap dari aplikasi.
+function seedStructured(w) {
+  var kaya = w.desil >= 8;
+  return {
+    wilayah: { provinsi: '[51] BALI', kabupaten: '[08] BULELENG', kecamatan: '[090] TEJAKULA', desa: w.desa,
+      klasifikasi: '2. Perdesaan', kodeSls: '0003' + String(w.rt || '01').slice(-2), namaSls: w.dusun, kodePos: '81173', namaJalan: w.alamat, nomorRumah: '-' },
+    statusKeluarga: '1. Ditemukan', jumlahAnggotaKK: 1, alamatSesuaiKK: '1. Ya, Sesuai KK',
+    geotag: { mode: '2. Input Manual', lat: '', long: '', akurasi: '' },
+    rumah: { jumlahKeluarga: 1, jenisBangunan: '1. Rumah tinggal tunggal', statusKepemilikan: '1. Milik sendiri', buktiMilik: '1. SHM', nilaiSewa: 500000, luasLantai: 45,
+      lantaiBahan: kaya ? '2. Keramik' : '8. Tanah', lantaiKondisi: '1. Baik', dindingBahan: kaya ? '1. Tembok' : '6. Bambu', dindingKondisi: '1. Baik', atapBahan: kaya ? '2. Genteng' : '3. Seng', atapKondisi: '1. Baik',
+      fasilitasBAB: '1. Ada, digunakan oleh anggota keluarga dalam satu rumah', jenisKloset: '1. Leher angsa', pembuanganTinja: '1. Tangki septik', sumberAirMinum: '5. Sumur terlindung', sumberPenerangan: '1. Listrik PLN dengan meteran',
+      pengeluaranListrik: 100000, pengeluaranPulsa: 100000, pengeluaranInternet: 0, foto: { depan: { has: true }, ruangTamu: { has: true }, kamarMandi: null } },
+    meteran: [ { daya: kaya ? '3. 1.300 watt' : '1. 450 watt', jenisId: 'ID Pelanggan', idPelanggan: (String(w.noKK) + '00').slice(0, 12) } ],
+    aset: { tabungGas3: 1, tabungGas55: 0, kulkas: kaya ? 1 : 0, ac: 0, emas: 0, komputer: 0, sepedaMotor: w.desil >= 5 ? 1 : 0, nilaiSepedaMotor: w.desil >= 5 ? 15000000 : 0, mobil: w.desil >= 9 ? 1 : 0, nilaiMobil: w.desil >= 9 ? 120000000 : 0, lahanLain: 0, bangunanLain: 0 },
+    anggota: [ { no: 1, nama: w.nama, nik: w.nik, hp: '-', keberadaan: '1. Tinggal di rumah/tempat tinggal ini', domisili: '1. Sesuai KK dan KTP', jk: '1. Laki-laki',
+      tglLahir: '05', blnLahir: '05 - Mei', thnLahir: '1985', umur: '41', statusKawin: '2. Kawin/nikah', hubungan: '1. Kepala Keluarga',
+      partisipasiSekolah: '2. Tidak bersekolah lagi', pendidikan: '1. SD/sederajat', pendapatanKerja: '1. Ya', pendapatanUsaha: '2. Tidak', nilaiUsaha: '', pendapatanLain: '2. Tidak',
+      profesi: 'Petani', statusKerja: '1. Berusaha sendiri', disabilitas: {}, kesehatan: {}, rekening: '4. Tidak ada' } ],
+    catatan: ''
+  };
+}
+
 function seedData(force) {
   var sh = sheet(SHEETS.WARGA);
   if (force) { if (sh.getLastRow() > 1) sh.deleteRows(2, sh.getLastRow() - 1); }
@@ -244,13 +281,14 @@ function seedData(force) {
     { id: 'w07', noKK: '5108150201010007', nik: '5108150201750007', nama: 'I Nyoman Reta', desa: 'Desa Penuktukan', dusun: 'Banjar Dinas Penuktukan', rt: '001', rw: '001', alamat: 'Jl. Singaraja-Amlapura', desil: 2, bansos: 'PKH + BPNT' },
     { id: 'w12', noKK: '5108150203010012', nik: '5108150512720012', nama: 'I Komang Wirawan', desa: 'Desa Penuktukan', dusun: 'Banjar Dinas Kawanan', rt: '002', rw: '003', alamat: 'Br. Kawanan No. 1', desil: 10, bansos: 'Tidak Ada' },
     { id: 'w13', noKK: '5108150301010013', nik: '5108150301680013', nama: 'I Wayan Repot', desa: 'Desa Tembok', dusun: 'Banjar Dinas Tembok', rt: '001', rw: '001', alamat: 'Jl. Tembok-Tejakula', desil: 1, bansos: 'PKH' },
-    { id: 'w16', noKK: '5108150302010016', nik: '5108152610830016', nama: 'I Made Suarjana', desa: 'Desa Tembok', dusun: 'Banjar Dinas Dukuh', rt: '002', rw: '002', alamat: 'Br. Dukuh Kaja', desil: 9, bansos: 'Tidak Ada' }
+    { id: 'w16', noKK: '5108150302010016', nik: '5108152610830016', nama: 'I Made Suarjana', desa: 'Desa Tembok', dusun: 'Banjar Dinas Dukuh', rt: '002', rw: '002', alamat: 'Br. Dukuh Kaja', desil: 9, bansos: 'Tidak Ada', status: 'draft' }
   ];
   var rows = seed.map(function(w){
-    var data = Object.assign({}, w, { anggota: [w.nama], snapshots: [
+    var status = w.status || 'final';
+    var data = Object.assign({}, w, seedStructured(w), { status: status, snapshots: [
       { tanggal: today(), operator: 'Sistem', data: Object.assign({}, w), fieldYangBerubah: [], foto: {} }
     ]});
-    return [w.id, w.noKK, w.nik, w.nama, w.dusun, w.rt, w.rw, w.alamat, w.desil, w.bansos, today(), JSON.stringify(data)];
+    return [w.id, w.noKK, w.nik, w.nama, w.dusun, w.rt, w.rw, w.alamat, w.desil, w.bansos, today(), JSON.stringify(data), status];
   });
   sh.getRange(sh.getLastRow() + 1, 1, rows.length, WARGA_COLS.length).setValues(rows);
 

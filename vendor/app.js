@@ -26,6 +26,337 @@ function css(str) {
 }
 
 // ---------------------------------------------------------------------------
+// Path helpers for the nested FASIH form ("rumah.lantaiBahan",
+// "anggota.2.disabilitas.fisik", "meteran.0.idPelanggan"). Immutable setPath
+// clones along the path so React state updates stay pure.
+// ---------------------------------------------------------------------------
+function getPath(obj, path) {
+  var p = String(path).split('.'),
+    c = obj;
+  for (var i = 0; i < p.length; i++) {
+    if (c == null) return undefined;
+    c = c[p[i]];
+  }
+  return c;
+}
+function setPath(obj, path, val) {
+  var p = String(path).split('.');
+  var root = Array.isArray(obj) ? obj.slice() : Object.assign({}, obj);
+  var c = root;
+  for (var i = 0; i < p.length - 1; i++) {
+    var k = p[i];
+    var nx = c[k];
+    c[k] = Array.isArray(nx) ? nx.slice() : Object.assign({}, nx || {});
+    c = c[k];
+  }
+  c[p[p.length - 1]] = val;
+  return root;
+}
+
+// ---------------------------------------------------------------------------
+// FASIH "Pemutakhiran DTSEN PBI 2026" (moda Aplikasi) — daftar kode jawaban,
+// persis seperti kuesioner. Nilai tersimpan = string berkode ("1. ...") agar
+// jelas & mudah divalidasi. Dipakai untuk render form & mesin validasi.
+// ---------------------------------------------------------------------------
+var KODE = {
+  statusKeluarga: ['0. Tidak Ditemukan (STOP)', '1. Ditemukan', '3. Meninggal', '4. Tidak Eligible', '5. Tidak dapat ditemui sampai akhir pendataan'],
+  alamatSesuaiKK: ['1. Ya, Sesuai KK', '2. Tidak Sesuai KK'],
+  geotagMode: ['1. Geotagging langsung', '2. Input Manual'],
+  jenisBangunan: ['1. Rumah tinggal tunggal', '2. Apartemen', '3. Rumah Susun', '4. Rumah Deret', '5. Kos'],
+  statusKepemilikan: ['1. Milik sendiri', '2. Kontrak/sewa', '3. Bebas sewa', '4. Dinas', '5. Lainnya'],
+  buktiMilik: ['1. SHM', '2. Sertifikat selain SHM (SHGB, SHSRS)', '3. Surat bukti lainnya (Girik, Letter C, dll)', '4. Tidak Punya'],
+  lantaiBahan: ['1. Marmer/granit', '2. Keramik', '3. Parket/vinil/permadani', '4. Ubin/tegel/teraso', '5. Kayu/papan', '6. Semen/bata merah', '7. Bambu', '8. Tanah', '9. Lainnya'],
+  kondisi: ['1. Baik', '2. Rusak ringan', '3. Rusak sedang', '4. Rusak berat'],
+  dindingBahan: ['1. Tembok', '2. Plesteran anyaman bambu/kawat', '3. Kayu/Papan/Gypsum/GRC/Calciboard', '4. Anyaman bambu', '5. Batang kayu', '6. Bambu', '7. Lainnya'],
+  atapBahan: ['1. Beton', '2. Genteng', '3. Seng', '4. Asbes', '5. Bambu', '6. Kayu/sirap', '7. Jerami/ijuk/daun daunan/rumbia', '8. Lainnya'],
+  fasilitasBAB: ['1. Ada, digunakan oleh anggota keluarga dalam satu rumah', '2. Ada, digunakan bersama oleh anggota keluarga dari beberapa rumah', '3. Ada, di MCK komunal', '4. Ada, di MCK umum/siapapun menggunakan', '5. Ada, anggota keluarga tidak menggunakan', '6. Tidak Ada'],
+  jenisKloset: ['1. Leher angsa', '2. Plengsengan dengan tutup', '3. Plengsengan tanpa tutup', '4. Cemplung/cubluk'],
+  pembuanganTinja: ['1. Tangki septik', '2. IPAL', '3. Kolam/sawah/sungai/danau/laut', '4. Lubang tanah', '5. Pantai/tanah lapang/kebun', '6. Lainnya'],
+  sumberAirMinum: ['1. Air kemasan bermerk', '2. Air isi ulang', '3. Leding', '4. Sumur bor/pompa', '5. Sumur terlindung', '6. Sumur tak terlindung', '7. Mata air terlindung', '8. Mata air tak terlindung', '9. Air permukaan (sungai/danau/waduk/kolam/irigasi)', '10. Air hujan', '11. Lainnya'],
+  sumberPenerangan: ['1. Listrik PLN dengan meteran', '2. Listrik PLN tanpa meteran', '3. Listrik Non-PLN', '4. Bukan listrik'],
+  daya: ['1. 450 watt', '2. 900 watt', '3. 1.300 watt', '4. 2.200 watt', '5. > 2.200 watt'],
+  jenisIdMeteran: ['ID Pelanggan', 'No Meteran'],
+  keberadaan: ['1. Tinggal di rumah/tempat tinggal ini', '2. Meninggal', '3. Tidak tinggal bersama keluarga/pindah ke wilayah (daerah lain di Indonesia)', '4. Tidak tinggal bersama keluarga/pindah ke luar negeri', '6. Sudah pisah KK', '7. Tidak ditemukan/Tidak dikenal'],
+  domisili: ['1. Sesuai KK dan KTP', '2. Hanya Sesuai KK', '3. Hanya Sesuai KTP', '4. Tidak sesuai dengan KK dan KTP'],
+  jk: ['1. Laki-laki', '2. Perempuan'],
+  bulan: ['01 - Januari', '02 - Februari', '03 - Maret', '04 - April', '05 - Mei', '06 - Juni', '07 - Juli', '08 - Agustus', '09 - September', '10 - Oktober', '11 - November', '12 - Desember'],
+  statusKawin: ['1. Belum kawin', '2. Kawin/nikah', '3. Cerai hidup', '4. Cerai mati'],
+  hubungan: ['1. Kepala Keluarga', '2. Istri/Suami', '3. Anak', '4. Menantu', '5. Cucu', '6. Orang Tua', '7. Mertua', '8. Famili Lain', '9. Lainnya'],
+  partisipasiSekolah: ['0. Tidak/belum pernah sekolah', '1. Masih sekolah', '2. Tidak bersekolah lagi'],
+  pendidikan: ['0. Tidak punya ijazah', '1. SD/sederajat', '2. SMP/sederajat', '3. SMA/sederajat', '4. D1/D2/D3', '5. D4/S1', '6. S2/S3'],
+  yaTidakTT: ['1. Ya', '2. Tidak', '9. Tidak Tahu'],
+  yaTidak: ['1. Ya', '2. Tidak'],
+  statusKerja: ['1. Berusaha sendiri', '2. Berusaha dibantu buruh', '3. Buruh/karyawan/pegawai swasta', '4. ASN/TNI/Polri/BUMN/BUMD/pejabat negara/kades', '5. Pekerja bebas', '6. Pekerja keluarga/tidak dibayar', '9. Tidak tahu'],
+  rekening: ['1. Ya untuk usaha', '2. Ya untuk pribadi', '3. Ya untuk usaha dan pribadi', '4. Tidak ada', '9. Tidak tahu']
+};
+// Blok IV R38 (a–f) & R39 (a–r): item Ya/Tidak per anggota.
+var DISABILITAS_ITEMS = [['fisik', 'Disabilitas Fisik'], ['mental', 'Disabilitas Mental'], ['intelektual', 'Disabilitas Intelektual'], ['netra', 'Disabilitas Sensorik Netra'], ['rungu', 'Disabilitas Sensorik Rungu'], ['wicara', 'Disabilitas Sensorik Wicara']];
+var KESEHATAN_ITEMS = [['hipertensi', 'Hipertensi (tekanan darah tinggi)'], ['rematik', 'Rematik'], ['asma', 'Asma'], ['jantung', 'Masalah jantung'], ['diabetes', 'Diabetes (kencing manis)'], ['tbc', 'Tuberkulosis (TBC)'], ['stroke', 'Stroke'], ['kanker', 'Kanker atau tumor ganas'], ['ginjal', 'Gagal ginjal'], ['hemofilia', 'Hemofilia'], ['hiv', 'HIV/AIDS'], ['kolesterol', 'Kolestrol'], ['sirosis', 'Sirosis hati'], ['talasemia', 'Talasemia'], ['leukemia', 'Leukemia'], ['alzheimer', 'Alzheimer'], ['lainnya', 'Lainnya'], ['tidakTahu', 'Tidak tahu']];
+// Blok III R22 aset bergerak (key,label,satuan) & R23 aset tidak bergerak.
+var ASET22 = [['tabungGas3', 'Tabung gas 3 kg', 'unit'], ['tabungGas55', 'Tabung gas 5,5 kg atau lebih', 'unit'], ['kulkas', 'Lemari es/kulkas', 'unit'], ['ac', 'AC', 'unit'], ['emas', 'Emas/perhiasan', 'gram'], ['komputer', 'Komputer/laptop/tablet', 'unit'], ['sepedaMotor', 'Sepeda motor', 'unit'], ['mobil', 'Mobil', 'unit']];
+var ASET23 = [['lahanLain', 'Jumlah lahan di tempat lain'], ['bangunanLain', 'Jumlah rumah/bangunan di tempat lain']];
+
+// Skema field Blok II (Perumahan). `when(k)` = skip-logic; tanpa `when` selalu berlaku.
+var BLOK2 = [{
+  p: 'rumah.jumlahKeluarga',
+  r: '5a',
+  label: 'Jumlah keluarga yang tinggal dalam 1 rumah/tempat tinggal',
+  type: 'number',
+  req: true
+}, {
+  p: 'rumah.jenisBangunan',
+  r: '6a',
+  label: 'Jenis bangunan tempat tinggal yang ditempati',
+  type: 'radio',
+  opts: KODE.jenisBangunan,
+  req: true
+}, {
+  p: 'rumah.statusKepemilikan',
+  r: '7a',
+  label: 'Status kepemilikan bangunan tempat tinggal',
+  type: 'radio',
+  opts: KODE.statusKepemilikan,
+  req: true
+}, {
+  p: 'rumah.buktiMilik',
+  r: '7b',
+  label: 'Jenis bukti kepemilikan tanah bangunan tempat tinggal',
+  type: 'radio',
+  opts: KODE.buktiMilik,
+  req: true,
+  when: k => /Milik sendiri/.test(getPath(k, 'rumah.statusKepemilikan') || '')
+}, {
+  p: 'rumah.nilaiSewa',
+  r: '8',
+  label: 'Perkiraan nilai sewa/kontrak sebulan',
+  type: 'rupiah',
+  req: true,
+  when: k => /Milik sendiri|Bebas sewa|Kontrak\/sewa/.test(getPath(k, 'rumah.statusKepemilikan') || '')
+}, {
+  p: 'rumah.luasLantai',
+  r: '9',
+  label: 'Luas lantai bangunan tempat tinggal (m²)',
+  type: 'number',
+  req: true
+}, {
+  p: 'rumah.lantaiBahan',
+  r: '10a',
+  label: 'Bahan bangunan utama lantai rumah terluas',
+  type: 'radio',
+  opts: KODE.lantaiBahan,
+  req: true
+}, {
+  p: 'rumah.lantaiKondisi',
+  r: '10b',
+  label: 'Kondisi lantai',
+  type: 'radio',
+  opts: KODE.kondisi,
+  req: true
+}, {
+  p: 'rumah.dindingBahan',
+  r: '11a',
+  label: 'Bahan bangunan utama dinding rumah terluas',
+  type: 'radio',
+  opts: KODE.dindingBahan,
+  req: true
+}, {
+  p: 'rumah.dindingKondisi',
+  r: '11b',
+  label: 'Kondisi dinding',
+  type: 'radio',
+  opts: KODE.kondisi,
+  req: true
+}, {
+  p: 'rumah.atapBahan',
+  r: '12a',
+  label: 'Bahan bangunan utama atap rumah terluas',
+  type: 'radio',
+  opts: KODE.atapBahan,
+  req: true
+}, {
+  p: 'rumah.atapKondisi',
+  r: '12b',
+  label: 'Kondisi atap',
+  type: 'radio',
+  opts: KODE.kondisi,
+  req: true
+}, {
+  p: 'rumah.fasilitasBAB',
+  r: '13',
+  label: 'Fasilitas tempat buang air besar & siapa yang menggunakan',
+  type: 'radio',
+  opts: KODE.fasilitasBAB,
+  req: true
+}, {
+  p: 'rumah.jenisKloset',
+  r: '14',
+  label: 'Jenis kloset yang digunakan',
+  type: 'radio',
+  opts: KODE.jenisKloset,
+  req: true
+}, {
+  p: 'rumah.pembuanganTinja',
+  r: '15',
+  label: 'Tempat pembuangan akhir tinja',
+  type: 'radio',
+  opts: KODE.pembuanganTinja,
+  req: true
+}, {
+  p: 'rumah.sumberAirMinum',
+  r: '16',
+  label: 'Sumber air utama yang digunakan keluarga untuk minum',
+  type: 'radio',
+  opts: KODE.sumberAirMinum,
+  req: true
+}, {
+  p: 'rumah.sumberPenerangan',
+  r: '17',
+  label: 'Sumber penerangan utama rumah ini',
+  type: 'radio',
+  opts: KODE.sumberPenerangan,
+  req: true
+}];
+// Blok II lanjutan (setelah roster Meteran R18).
+var BLOK2B = [{
+  p: 'rumah.pengeluaranListrik',
+  r: '19',
+  label: 'Nilai pengeluaran listrik sebulan',
+  type: 'rupiah',
+  req: true
+}, {
+  p: 'rumah.pengeluaranPulsa',
+  r: '20a',
+  label: 'Pengeluaran pulsa seluruh anggota keluarga sebulan',
+  type: 'rupiah',
+  req: true
+}, {
+  p: 'rumah.pengeluaranInternet',
+  r: '20b',
+  label: 'Pengeluaran internet seluruh anggota keluarga sebulan',
+  type: 'rupiah',
+  req: true
+}];
+// Skema field per anggota (Blok IV). `rp` = path relatif di objek anggota.
+// `when(k,a)` = skip-logic; `digits` = panjang digit wajib (NIK).
+var ANGGOTA_FIELDS = [{
+  rp: 'nama',
+  r: '25',
+  label: 'Nama Anggota Keluarga',
+  type: 'text',
+  req: true
+}, {
+  rp: 'nik',
+  r: '26a',
+  label: 'Nomor Induk Kependudukan (NIK)',
+  type: 'text',
+  req: true,
+  digits: 16
+}, {
+  rp: 'hp',
+  r: '26b',
+  label: 'Nomor telepon/HP (isi "-" bila tidak ada)',
+  type: 'text',
+  req: true
+}, {
+  rp: 'keberadaan',
+  r: '27a',
+  label: 'Keberadaan anggota keluarga',
+  type: 'radio',
+  opts: KODE.keberadaan,
+  req: true
+}, {
+  rp: 'domisili',
+  r: '27b',
+  label: 'Alamat Domisili',
+  type: 'radio',
+  opts: KODE.domisili,
+  req: true
+}, {
+  rp: 'jk',
+  r: '29',
+  label: 'Jenis Kelamin',
+  type: 'radio',
+  opts: KODE.jk,
+  req: true
+}, {
+  rp: 'statusKawin',
+  r: '31',
+  label: 'Status Perkawinan',
+  type: 'radio',
+  opts: KODE.statusKawin,
+  req: true
+}, {
+  rp: 'hubungan',
+  r: '32',
+  label: 'Hubungan dengan Kepala Keluarga',
+  type: 'radio',
+  opts: KODE.hubungan,
+  req: true
+}, {
+  rp: 'partisipasiSekolah',
+  r: '33',
+  label: 'Partisipasi sekolah',
+  type: 'radio',
+  opts: KODE.partisipasiSekolah,
+  req: true
+}, {
+  rp: 'pendidikan',
+  r: '34',
+  label: 'Pendidikan tertinggi yang ditamatkan',
+  type: 'radio',
+  opts: KODE.pendidikan,
+  req: true
+}, {
+  rp: 'pendapatanKerja',
+  r: '35a',
+  label: 'Pendapatan dari pekerjaan (gaji/upah/honor)',
+  type: 'radio',
+  opts: KODE.yaTidakTT,
+  req: true
+}, {
+  rp: 'pendapatanUsaha',
+  r: '35b',
+  label: 'Pendapatan dari usaha (offline/online)',
+  type: 'radio',
+  opts: KODE.yaTidakTT,
+  req: true
+}, {
+  rp: 'nilaiUsaha',
+  r: '35b',
+  label: 'Total pendapatan dari usaha sebulan',
+  type: 'rupiah',
+  req: true,
+  when: (k, a) => /^1\. Ya/.test(a.pendapatanUsaha || '')
+}, {
+  rp: 'pendapatanLain',
+  r: '35c',
+  label: 'Penerimaan pendapatan lain (transfer/pemberian/passive income)',
+  type: 'radio',
+  opts: KODE.yaTidakTT,
+  req: true
+}, {
+  rp: 'profesi',
+  r: '36',
+  label: 'Profesi/Pekerjaan Utama',
+  type: 'text',
+  req: true
+}, {
+  rp: 'statusKerja',
+  r: '37',
+  label: 'Status Kedudukan dalam Pekerjaan Utama',
+  type: 'radio',
+  opts: KODE.statusKerja,
+  req: true
+}, {
+  rp: 'rekening',
+  r: '40',
+  label: 'Memiliki rekening aktif atau dompet digital?',
+  type: 'radio',
+  opts: KODE.rekening,
+  req: true
+}];
+
+// ---------------------------------------------------------------------------
 // Component: ported from the DTSEN Desa design. DCLogic ≈ React.Component
 // (state / setState / props), so the original logic is reused verbatim and
 // renderVals() feeds a JSX translation of the design template.
@@ -487,6 +818,276 @@ class Component extends React.Component {
       kamarMandi: null
     };
   }
+  // Foto contoh (placeholder 1px) agar data seed lolos validasi foto wajib.
+  seedFoto() {
+    const ph = {
+      src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+      before: 48000,
+      after: 30000
+    };
+    return {
+      depan: Object.assign({}, ph),
+      ruangTamu: Object.assign({}, ph),
+      kamarMandi: null
+    };
+  }
+
+  // -- FASIH: faktori anggota, pemetaan ringkasan, & pembangkit struktur seed --
+  emptyDisabilitas() {
+    const o = {};
+    DISABILITAS_ITEMS.forEach(it => {
+      o[it[0]] = '2. Tidak';
+    });
+    return o;
+  }
+  emptyKesehatan() {
+    const o = {};
+    KESEHATAN_ITEMS.forEach(it => {
+      o[it[0]] = '2. Tidak';
+    });
+    return o;
+  }
+  mkAnggota(over) {
+    over = over || {};
+    return {
+      no: over.no || 1,
+      nama: over.nama || '',
+      nik: over.nik || '',
+      hp: over.hp || '-',
+      keberadaan: over.keberadaan || '1. Tinggal di rumah/tempat tinggal ini',
+      domisili: over.domisili || '1. Sesuai KK dan KTP',
+      jk: over.jk || '1. Laki-laki',
+      tglLahir: over.tglLahir || '',
+      blnLahir: over.blnLahir || '',
+      thnLahir: over.thnLahir || '',
+      umur: over.umur || '',
+      statusKawin: over.statusKawin || '2. Kawin/nikah',
+      hubungan: over.hubungan || '1. Kepala Keluarga',
+      partisipasiSekolah: over.partisipasiSekolah || '2. Tidak bersekolah lagi',
+      pendidikan: over.pendidikan || '1. SD/sederajat',
+      pendapatanKerja: over.pendapatanKerja || '2. Tidak',
+      pendapatanUsaha: over.pendapatanUsaha || '2. Tidak',
+      nilaiUsaha: over.nilaiUsaha || '',
+      pendapatanLain: over.pendapatanLain || '2. Tidak',
+      profesi: over.profesi || '',
+      statusKerja: over.statusKerja || '6. Pekerja keluarga/tidak dibayar',
+      disabilitas: Object.assign(this.emptyDisabilitas(), over.disabilitas || {}),
+      kesehatan: Object.assign(this.emptyKesehatan(), over.kesehatan || {}),
+      rekening: over.rekening || '4. Tidak ada'
+    };
+  }
+  kepalaKeluarga(k) {
+    const a = k && k.anggota || [];
+    return a.find(x => String(x.hubungan || '').indexOf('1.') === 0) || a[0] || null;
+  }
+  totalPendapatan(k) {
+    let s = 0;
+    (k && k.anggota || []).forEach(a => {
+      s += Number(a.nilaiUsaha || 0);
+    });
+    return s;
+  }
+  pendidikanProxy(p) {
+    p = String(p || '');
+    if (/^0\./.test(p)) return 'Tidak Sekolah';
+    if (/^1\./.test(p)) return 'SD';
+    if (/^2\./.test(p)) return 'SMP';
+    if (/^3\./.test(p)) return 'SMA';
+    if (/^4\./.test(p)) return 'D3';
+    return 'S1';
+  }
+  pendidikanProxyInv(old) {
+    old = String(old || '');
+    const m = {
+      'Tidak Sekolah': '0. Tidak punya ijazah',
+      'SD': '1. SD/sederajat',
+      'SMP': '2. SMP/sederajat',
+      'SMA': '3. SMA/sederajat',
+      'D3': '4. D1/D2/D3',
+      'S1': '5. D4/S1'
+    };
+    return m[old] || '1. SD/sederajat';
+  }
+  statusRumahProxy(r) {
+    const s = String(r && r.statusKepemilikan || '');
+    if (/Milik sendiri/.test(s)) return 'Milik Sendiri';
+    if (/Kontrak|sewa/.test(s) && !/Bebas/.test(s)) return 'Sewa/Kontrak';
+    return 'Numpang';
+  }
+  defaultWilayah(meta) {
+    const kodeDesa = {
+      'Desa Sambirenteng': '[008]',
+      'Desa Penuktukan': '[009]',
+      'Desa Tembok': '[010]'
+    };
+    return {
+      provinsi: '[51] BALI',
+      kabupaten: '[08] BULELENG',
+      kecamatan: '[090] TEJAKULA',
+      desa: (kodeDesa[meta.desa] || '[010]') + ' ' + String(meta.desa || '').replace('Desa ', '').toUpperCase(),
+      klasifikasi: '2. Perdesaan',
+      kodeSls: '0003' + String(meta.rt || '01').slice(-2),
+      namaSls: meta.dusun || '',
+      kodePos: '81173',
+      namaJalan: meta.alamat || '',
+      nomorRumah: '-'
+    };
+  }
+  // Pemetaan struktur FASIH -> input lama hitungDesil() (dipertahankan apa adanya).
+  deriveDesilInputs(k) {
+    const r = k.rumah || {},
+      as = k.aset || {},
+      krt = this.kepalaKeluarga(k) || {};
+    const lantai = /Tanah/.test(r.lantaiBahan) ? 'Tanah' : /Semen|Bambu|Kayu|papan/.test(r.lantaiBahan) ? 'Semen' : 'Keramik/Ubin';
+    const dinding = /^1\. Tembok/.test(r.dindingBahan) ? 'Tembok' : /Plesteran|Kayu|Papan|Gypsum/.test(r.dindingBahan) ? 'Setengah Tembok' : 'Bambu/Kayu';
+    const atap = /Beton|Genteng/.test(r.atapBahan) ? 'Genteng/Beton' : /Seng|Asbes/.test(r.atapBahan) ? 'Seng/Asbes' : 'Daun/Rumbia';
+    const air = /kemasan|isi ulang|Leding|bor|pompa/.test(r.sumberAirMinum) ? 'PDAM/Ledeng' : /Sumur|Mata air/.test(r.sumberAirMinum) ? 'Sumur' : 'Sungai/Hujan';
+    const daya = k.meteran && k.meteran[0] && k.meteran[0].daya || '';
+    const pen = /Bukan listrik|Non-PLN/.test(r.sumberPenerangan) ? 'Non-PLN' : /^1\. 450/.test(daya) ? 'PLN 450 VA' : 'PLN 900+ VA';
+    const aset = [];
+    if (Number(as.sepedaMotor) > 0) aset.push('Sepeda Motor');
+    if (Number(as.mobil) > 0) aset.push('Mobil');
+    if (Number(as.kulkas) > 0) aset.push('Kulkas');
+    if (Number(as.ac) > 0) aset.push('AC');
+    return {
+      penghasilan: this.totalPendapatan(k),
+      lantai: lantai,
+      dinding: dinding,
+      atap: atap,
+      sumberAir: air,
+      penerangan: pen,
+      aset: aset,
+      pekerjaan: krt.profesi || 'Tidak Bekerja',
+      pendidikan: this.pendidikanProxy(krt.pendidikan)
+    };
+  }
+  // Ringkasan datar yang dipakai dashboard/daftar/riwayat/desil/snapshot.
+  deriveSummary(k) {
+    const inp = this.deriveDesilInputs(k);
+    const desil = k.desilManual ? Number(k.desil || 5) : this.hitungDesil(inp);
+    const disab = (k.anggota || []).some(a => DISABILITAS_ITEMS.some(it => /^1\. Ya/.test(a.disabilitas && a.disabilitas[it[0]] || ''))) ? 'Ada' : 'Tidak Ada';
+    return Object.assign({}, inp, {
+      desil: desil,
+      bansos: k.bansos || 'Tidak Ada',
+      jumlahAnggota: (k.anggota || []).length,
+      disabilitas: disab,
+      statusRumah: this.statusRumahProxy(k.rumah)
+    });
+  }
+  // Bangun blok terstruktur FASIH dari satu "state" ekonomi lama (untuk seed).
+  stateToStruct(state, meta) {
+    const invLantai = {
+      'Tanah': '8. Tanah',
+      'Semen': '6. Semen/bata merah',
+      'Keramik/Ubin': '2. Keramik'
+    };
+    const invDinding = {
+      'Bambu/Kayu': '6. Bambu',
+      'Setengah Tembok': '2. Plesteran anyaman bambu/kawat',
+      'Tembok': '1. Tembok'
+    };
+    const invAtap = {
+      'Daun/Rumbia': '7. Jerami/ijuk/daun daunan/rumbia',
+      'Seng/Asbes': '3. Seng',
+      'Genteng/Beton': '2. Genteng'
+    };
+    const invAir = {
+      'Sungai/Hujan': '9. Air permukaan (sungai/danau/waduk/kolam/irigasi)',
+      'Sumur': '5. Sumur terlindung',
+      'PDAM/Ledeng': '3. Leding'
+    };
+    const invStatus = {
+      'Milik Sendiri': '1. Milik sendiri',
+      'Sewa/Kontrak': '2. Kontrak/sewa',
+      'Numpang': '3. Bebas sewa'
+    };
+    const penToDaya = {
+      'PLN 450 VA': '1. 450 watt',
+      'PLN 900+ VA': '3. 1.300 watt'
+    };
+    const daya = penToDaya[state.penerangan] || null;
+    const penerangan = state.penerangan === 'Non-PLN' ? '3. Listrik Non-PLN' : '1. Listrik PLN dengan meteran';
+    const rumah = {
+      jumlahKeluarga: 1,
+      jenisBangunan: '1. Rumah tinggal tunggal',
+      statusKepemilikan: invStatus[state.statusRumah] || '1. Milik sendiri',
+      buktiMilik: '1. SHM',
+      nilaiSewa: state.statusRumah === 'Milik Sendiri' ? 500000 : 800000,
+      luasLantai: 36 + Number(state.jumlahAnggota || 1) * 8,
+      lantaiBahan: invLantai[state.lantai] || '8. Tanah',
+      lantaiKondisi: '1. Baik',
+      dindingBahan: invDinding[state.dinding] || '6. Bambu',
+      dindingKondisi: '1. Baik',
+      atapBahan: invAtap[state.atap] || '3. Seng',
+      atapKondisi: '1. Baik',
+      fasilitasBAB: '1. Ada, digunakan oleh anggota keluarga dalam satu rumah',
+      jenisKloset: '1. Leher angsa',
+      pembuanganTinja: '1. Tangki septik',
+      sumberAirMinum: invAir[state.sumberAir] || '5. Sumur terlindung',
+      sumberPenerangan: penerangan,
+      pengeluaranListrik: state.penerangan === 'Non-PLN' ? 0 : daya && /450/.test(daya) ? 75000 : 250000,
+      pengeluaranPulsa: 100000,
+      pengeluaranInternet: Number(state.penghasilan || 0) > 3000000 ? 150000 : 0,
+      foto: this.seedFoto()
+    };
+    const meteran = daya ? [{
+      daya: daya,
+      jenisId: 'ID Pelanggan',
+      idPelanggan: (String(meta.noKK) + '00').slice(0, 12)
+    }] : [];
+    const A = state.aset || [];
+    const has = n => A.indexOf(n) >= 0;
+    const aset = {
+      tabungGas3: 1,
+      tabungGas55: 0,
+      kulkas: has('Kulkas') || has('TV') ? 1 : 0,
+      ac: has('AC') ? 1 : 0,
+      emas: has('Mobil') ? 20 : 0,
+      komputer: 0,
+      sepedaMotor: has('Sepeda Motor') ? 1 : 0,
+      nilaiSepedaMotor: has('Sepeda Motor') ? 15000000 : 0,
+      mobil: has('Mobil') ? 1 : 0,
+      nilaiMobil: has('Mobil') ? 120000000 : 0,
+      lahanLain: 0,
+      bangunanLain: 0
+    };
+    const names = meta.anggota && meta.anggota.length ? meta.anggota : [meta.nama];
+    const dis = state.disabilitas === 'Ada';
+    const anggota = names.map((nm, i) => {
+      const hub = i === 0 ? '1. Kepala Keluarga' : i === 1 ? '2. Istri/Suami' : '3. Anak';
+      const jk = i === 0 ? '1. Laki-laki' : i === 1 ? '2. Perempuan' : i % 2 ? '1. Laki-laki' : '2. Perempuan';
+      const thn = 1990 - i * 3;
+      return this.mkAnggota({
+        no: i + 1,
+        nama: nm,
+        nik: i === 0 ? meta.nik : String(meta.nik).slice(0, -2) + String(20 + i).slice(-2),
+        hp: i === 0 ? '0812' + String(meta.noKK).slice(-8) : '-',
+        jk: jk,
+        hubungan: hub,
+        tglLahir: String(5 + i),
+        blnLahir: '05 - Mei',
+        thnLahir: String(thn),
+        umur: String(2026 - thn),
+        statusKawin: i < 2 ? '2. Kawin/nikah' : '1. Belum kawin',
+        partisipasiSekolah: i >= 2 ? '1. Masih sekolah' : '2. Tidak bersekolah lagi',
+        pendidikan: this.pendidikanProxyInv(state.pendidikan),
+        pendapatanKerja: i === 0 ? '1. Ya' : '2. Tidak',
+        pendapatanUsaha: i === 0 && /wiraswasta|pedagang|usaha|dagang/i.test(state.pekerjaan) ? '1. Ya' : '2. Tidak',
+        nilaiUsaha: i === 0 ? Number(state.penghasilan || 0) : '',
+        profesi: i === 0 ? state.pekerjaan : i === 1 ? 'Mengurus rumah tangga' : 'Pelajar/Mahasiswa',
+        statusKerja: i === 0 ? '1. Berusaha sendiri' : '6. Pekerja keluarga/tidak dibayar',
+        disabilitas: dis && i === 0 ? {
+          fisik: '1. Ya'
+        } : {}
+      });
+    });
+    return {
+      rumah: rumah,
+      meteran: meteran,
+      aset: aset,
+      anggota: anggota
+    };
+  }
   mkWarga(meta, states) {
     const snaps = [];
     let prev = null;
@@ -519,10 +1120,27 @@ class Component extends React.Component {
       prev = data;
     }
     const last = snaps[snaps.length - 1];
+    const struct = this.stateToStruct(states[states.length - 1], meta);
     return Object.assign({}, meta, last.data, {
       foto: last.foto,
       snapshots: snaps,
-      anggota: meta.anggota || []
+      anggota: struct.anggota,
+      rumah: struct.rumah,
+      meteran: struct.meteran,
+      aset: struct.aset,
+      wilayah: this.defaultWilayah(meta),
+      statusKeluarga: '1. Ditemukan',
+      geotag: {
+        mode: '2. Input Manual',
+        lat: '',
+        long: '',
+        akurasi: ''
+      },
+      catatan: '',
+      status: 'final',
+      jumlahAnggotaKK: struct.anggota.length,
+      alamatSesuaiKK: '1. Ya, Sesuai KK',
+      desilManual: false
     });
   }
 
@@ -1213,9 +1831,11 @@ class Component extends React.Component {
     }];
   }
   blankForm() {
+    const id = 'w' + Date.now();
     return {
-      id: 'w' + Date.now(),
+      id: id,
       isNew: true,
+      status: 'draft',
       noKK: '',
       nik: '',
       nama: '',
@@ -1224,74 +1844,85 @@ class Component extends React.Component {
       rt: '',
       rw: '',
       alamat: '',
-      anggotaStr: '',
-      jumlahAnggota: '1',
-      disabilitas: 'Tidak Ada',
-      pekerjaan: 'Buruh Tani',
-      pendidikan: 'SD',
-      penghasilan: '',
-      statusRumah: 'Milik Sendiri',
-      lantai: 'Tanah',
-      dinding: 'Bambu/Kayu',
-      atap: 'Seng/Asbes',
-      sumberAir: 'Sumur',
-      penerangan: 'PLN 450 VA',
-      aset: [],
+      wilayah: {
+        provinsi: '[51] BALI',
+        kabupaten: '[08] BULELENG',
+        kecamatan: '[090] TEJAKULA',
+        desa: '',
+        klasifikasi: '2. Perdesaan',
+        kodeSls: '',
+        namaSls: '',
+        kodePos: '',
+        namaJalan: '',
+        nomorRumah: ''
+      },
+      statusKeluarga: '1. Ditemukan',
+      jumlahAnggotaKK: '',
+      alamatSesuaiKK: '',
+      geotag: {
+        mode: '2. Input Manual',
+        lat: '',
+        long: '',
+        akurasi: ''
+      },
+      rumah: {
+        jumlahKeluarga: '',
+        jenisBangunan: '',
+        statusKepemilikan: '',
+        buktiMilik: '',
+        nilaiSewa: '',
+        luasLantai: '',
+        lantaiBahan: '',
+        lantaiKondisi: '',
+        dindingBahan: '',
+        dindingKondisi: '',
+        atapBahan: '',
+        atapKondisi: '',
+        fasilitasBAB: '',
+        jenisKloset: '',
+        pembuanganTinja: '',
+        sumberAirMinum: '',
+        sumberPenerangan: '',
+        pengeluaranListrik: '',
+        pengeluaranPulsa: '',
+        pengeluaranInternet: '',
+        foto: this.emptyFoto()
+      },
+      meteran: [],
+      aset: {
+        tabungGas3: '',
+        tabungGas55: '',
+        kulkas: '',
+        ac: '',
+        emas: '',
+        komputer: '',
+        sepedaMotor: '',
+        nilaiSepedaMotor: '',
+        mobil: '',
+        nilaiMobil: '',
+        lahanLain: '',
+        bangunanLain: ''
+      },
+      anggota: [this.mkAnggota({
+        no: 1,
+        hubungan: '1. Kepala Keluarga'
+      })],
+      catatan: '',
       bansos: 'Tidak Ada',
       desilManual: false,
       desil: '5',
-      foto: this.emptyFoto()
+      _openIdx: 0
     };
   }
   dataToForm(w) {
-    return {
-      id: w.id,
+    const clone = JSON.parse(JSON.stringify(w));
+    return Object.assign(clone, {
       isNew: false,
-      noKK: w.noKK,
-      nik: w.nik,
-      nama: w.nama,
-      desa: w.desa || 'Desa Sambirenteng',
-      dusun: w.dusun,
-      rt: w.rt,
-      rw: w.rw,
-      alamat: w.alamat,
-      anggotaStr: (w.anggota || []).join(', '),
-      jumlahAnggota: String(w.jumlahAnggota),
-      disabilitas: w.disabilitas,
-      pekerjaan: w.pekerjaan,
-      pendidikan: w.pendidikan,
-      penghasilan: String(w.penghasilan),
-      statusRumah: w.statusRumah,
-      lantai: w.lantai,
-      dinding: w.dinding,
-      atap: w.atap,
-      sumberAir: w.sumberAir,
-      penerangan: w.penerangan,
-      aset: (w.aset || []).slice(),
-      bansos: w.bansos,
-      desilManual: false,
-      desil: String(w.desil),
-      foto: Object.assign({}, w.foto)
-    };
-  }
-  formToData(f) {
-    const base = {
-      pekerjaan: f.pekerjaan,
-      pendidikan: f.pendidikan,
-      penghasilan: Number(f.penghasilan || 0),
-      jumlahAnggota: Number(f.jumlahAnggota || 0),
-      disabilitas: f.disabilitas,
-      statusRumah: f.statusRumah,
-      lantai: f.lantai,
-      dinding: f.dinding,
-      atap: f.atap,
-      sumberAir: f.sumberAir,
-      penerangan: f.penerangan,
-      aset: f.aset.slice(),
-      bansos: f.bansos
-    };
-    base.desil = f.desilManual ? Number(f.desil) : this.hitungDesil(base);
-    return base;
+      desilManual: !!w.desilManual,
+      desil: String(w.desil || 5),
+      bansos: w.bansos || 'Tidak Ada',
+      _openIdx: 0
+    });
   }
   opName() {
     return this.state && this.state.auth && this.state.auth.nama || this.props.namaOperator || 'Budi Santoso';
@@ -1339,37 +1970,69 @@ class Component extends React.Component {
       view: this.state.selectedId ? 'riwayat' : 'daftar'
     });
   }
-  onFormChange(e) {
-    const k = e.target.getAttribute('data-field');
-    const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+  // -- Handler form FASIH (nested path) ----------------------------------------
+  onFormField(e) {
+    this.setForm(e.target.getAttribute('data-path'), e.target.value);
+  }
+  setForm(path, val) {
     this.setState(s => ({
-      form: Object.assign({}, s.form, {
-        [k]: v
-      })
+      form: setPath(s.form, path, val)
     }));
   }
-  toggleAset(n) {
+  toggleOpenAnggota(i) {
+    this.setState(s => ({
+      form: setPath(s.form, '_openIdx', s.form._openIdx === i ? -1 : i)
+    }));
+  }
+  tambahAnggota() {
+    if (!this.canCrud()) return;
     this.setState(s => {
-      const a = s.form.aset.slice();
-      const i = a.indexOf(n);
-      if (i >= 0) a.splice(i, 1);else a.push(n);
+      const ang = s.form.anggota.slice();
+      ang.push(this.mkAnggota({
+        no: ang.length + 1,
+        hubungan: '3. Anak'
+      }));
+      let f = setPath(s.form, 'anggota', ang);
       return {
-        form: Object.assign({}, s.form, {
-          aset: a
-        })
+        form: setPath(f, '_openIdx', ang.length - 1)
       };
     });
   }
-  hapusFoto(slot) {
+  hapusAnggota(i) {
+    if (!this.canCrud()) return;
+    this.setState(s => {
+      let ang = s.form.anggota.slice();
+      ang.splice(i, 1);
+      ang = ang.map((a, j) => Object.assign({}, a, {
+        no: j + 1
+      }));
+      let f = setPath(s.form, 'anggota', ang);
+      return {
+        form: setPath(f, '_openIdx', Math.max(0, Math.min(s.form._openIdx, ang.length - 1)))
+      };
+    });
+  }
+  setJumlahMeteran(n) {
+    n = Math.max(0, Math.min(10, Number(n) || 0));
+    this.setState(s => {
+      const cur = s.form.meteran.slice();
+      while (cur.length < n) cur.push({
+        daya: '',
+        jenisId: 'ID Pelanggan',
+        idPelanggan: ''
+      });
+      cur.length = n;
+      return {
+        form: setPath(s.form, 'meteran', cur)
+      };
+    });
+  }
+  hapusFoto(path) {
     this.setState(s => ({
-      form: Object.assign({}, s.form, {
-        foto: Object.assign({}, s.form.foto, {
-          [slot]: null
-        })
-      })
+      form: setPath(s.form, path, null)
     }));
   }
-  handleFoto(slot, e) {
+  handleFoto(path, e) {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
     const before = file.size;
@@ -1407,14 +2070,10 @@ class Component extends React.Component {
           bytes = Math.round(url.split(',')[1].length * 3 / 4);
         }
         this.setState(s => ({
-          form: Object.assign({}, s.form, {
-            foto: Object.assign({}, s.form.foto, {
-              [slot]: {
-                src: url,
-                before: before,
-                after: bytes
-              }
-            })
+          form: setPath(s.form, path, {
+            src: url,
+            before: before,
+            after: bytes
           })
         }));
       };
@@ -1422,6 +2081,96 @@ class Component extends React.Component {
     };
     reader.readAsDataURL(file);
     e.target.value = '';
+  }
+
+  // -- Validasi FASIH: GALAT (blokir finalisasi) / PERINGATAN / KOSONG ----------
+  validateKeluarga(k) {
+    const galat = [],
+      peringatan = [],
+      kosong = [];
+    const isEmpty = v => v == null || String(v).trim() === '';
+    const add = (arr, blok, r, label, path) => arr.push({
+      blok: blok,
+      rincian: r,
+      label: label,
+      path: path
+    });
+    // Blok I
+    if (isEmpty(k.statusKeluarga)) add(galat, 'I', '16', 'Status Keberadaan Keluarga', 'statusKeluarga');
+    const ditemukan = /^1\. Ditemukan/.test(k.statusKeluarga || '');
+    if (ditemukan) {
+      if (isEmpty(k.nama)) add(galat, 'I', '1a', 'Nama Kepala Keluarga', 'nama');
+      if (!/^\d{16}$/.test(String(k.nik || ''))) add(galat, 'I', '1b', 'NIK Kepala Keluarga harus 16 digit angka', 'nik');
+      if (!/^\d{16}$/.test(String(k.noKK || ''))) add(galat, 'I', '1c', 'No. Kartu Keluarga harus 16 digit angka', 'noKK');
+      if (isEmpty(getPath(k, 'wilayah.kodePos'))) add(galat, 'I', '3f', 'Kode Pos', 'wilayah.kodePos');
+      if (isEmpty(getPath(k, 'wilayah.namaJalan'))) add(galat, 'I', '3j', 'Nama Jalan', 'wilayah.namaJalan');
+      if (isEmpty(k.alamatSesuaiKK)) add(galat, 'I', '4', 'Kesesuaian alamat dengan KK', 'alamatSesuaiKK');
+      if (isEmpty(getPath(k, 'geotag.lat')) || isEmpty(getPath(k, 'geotag.long'))) add(kosong, 'I', '3l', 'Geotagging lokasi (lat/long)', 'geotag.lat');
+    }
+    // Blok II
+    BLOK2.concat(BLOK2B).forEach(d => {
+      if (d.when && !d.when(k)) return;
+      const v = getPath(k, d.p);
+      if (d.req && isEmpty(v)) add(galat, 'II', d.r, d.label, d.p);else if (d.p === 'rumah.luasLantai' && !isEmpty(v) && Number(v) <= 0) add(galat, 'II', '9', 'Luas lantai harus lebih dari 0', d.p);
+    });
+    if (!getPath(k, 'rumah.foto.depan')) add(galat, 'II', '21a', 'Foto tampak depan rumah', 'rumah.foto.depan');
+    if (!getPath(k, 'rumah.foto.ruangTamu')) add(galat, 'II', '21b', 'Foto ruang tamu', 'rumah.foto.ruangTamu');
+    if (!getPath(k, 'rumah.foto.kamarMandi')) add(kosong, 'II', '21c', 'Foto kamar mandi', 'rumah.foto.kamarMandi');
+    const pakaiMeteran = /dengan meteran/.test(getPath(k, 'rumah.sumberPenerangan') || '');
+    if (pakaiMeteran) {
+      if (!(k.meteran && k.meteran.length)) add(galat, 'II', '18a', 'Jumlah meteran listrik minimal 1', 'rumah.sumberPenerangan');
+      (k.meteran || []).forEach((m, i) => {
+        if (isEmpty(m.daya)) add(galat, 'II', '18b', 'Daya terpasang meteran ke-' + (i + 1), 'meteran.' + i + '.daya');
+        const digits = /No Meteran/.test(m.jenisId || '') ? 11 : 12;
+        if (isEmpty(m.idPelanggan)) add(galat, 'II', '18c', 'ID Pelanggan/No Meteran ke-' + (i + 1), 'meteran.' + i + '.idPelanggan');else if (!new RegExp('^\\d{' + digits + '}$').test(String(m.idPelanggan))) add(galat, 'II', '18c', 'Meteran ke-' + (i + 1) + ': ' + (/No Meteran/.test(m.jenisId || '') ? 'No Meteran' : 'ID Pelanggan') + ' harus ' + digits + ' digit', 'meteran.' + i + '.idPelanggan');
+      });
+    }
+    // Blok III
+    ASET22.forEach(a => {
+      if (isEmpty(getPath(k, 'aset.' + a[0]))) add(galat, 'III', '22', 'Jumlah ' + a[1], 'aset.' + a[0]);
+    });
+    if (Number(getPath(k, 'aset.sepedaMotor')) > 0 && isEmpty(getPath(k, 'aset.nilaiSepedaMotor'))) add(galat, 'III', '22g', 'Total nilai aset sepeda motor', 'aset.nilaiSepedaMotor');
+    if (Number(getPath(k, 'aset.mobil')) > 0 && isEmpty(getPath(k, 'aset.nilaiMobil'))) add(galat, 'III', '22h', 'Total nilai aset mobil', 'aset.nilaiMobil');
+    ASET23.forEach(a => {
+      if (isEmpty(getPath(k, 'aset.' + a[0]))) add(galat, 'III', '23', 'Jumlah ' + a[1], 'aset.' + a[0]);
+    });
+    // Blok IV
+    const ang = k.anggota || [];
+    if (!ang.length) add(galat, 'IV', '24', 'Minimal satu anggota keluarga', 'anggota');
+    let nKepala = 0;
+    ang.forEach((a, i) => {
+      const base = 'anggota.' + i + '.';
+      const nm = a.nama || 'Anggota ' + (i + 1);
+      ANGGOTA_FIELDS.forEach(d => {
+        if (d.when && !d.when(k, a)) return;
+        const v = a[d.rp];
+        if (d.req && isEmpty(v)) add(galat, 'IV', d.r, d.label + ' — ' + nm, base + d.rp);else if (d.digits && !isEmpty(v) && !new RegExp('^\\d{' + d.digits + '}$').test(String(v))) add(galat, 'IV', d.r, nm + ': NIK harus ' + d.digits + ' digit angka', base + d.rp);
+      });
+      if (isEmpty(a.tglLahir) || isEmpty(a.blnLahir) || isEmpty(a.thnLahir)) add(galat, 'IV', '30', 'Tanggal/Bulan/Tahun lahir — ' + nm, base + 'thnLahir');
+      DISABILITAS_ITEMS.forEach(it => {
+        if (isEmpty(getPath(a, 'disabilitas.' + it[0]))) add(galat, 'IV', '38', it[1] + ' — ' + nm, base + 'disabilitas.' + it[0]);
+      });
+      KESEHATAN_ITEMS.forEach(it => {
+        if (isEmpty(getPath(a, 'kesehatan.' + it[0]))) add(galat, 'IV', '39', it[1] + ' — ' + nm, base + 'kesehatan.' + it[0]);
+      });
+      if (/^1\. Kepala Keluarga/.test(a.hubungan || '')) nKepala++;
+    });
+    if (ang.length) {
+      if (nKepala === 0) add(galat, 'IV', '32', 'Harus ada tepat satu Kepala Keluarga', 'anggota.0.hubungan');else if (nKepala > 1) add(galat, 'IV', '32', 'Kepala Keluarga lebih dari satu (' + nKepala + ')', 'anggota.0.hubungan');
+      const krt = ang.find(a => /^1\. Kepala/.test(a.hubungan || ''));
+      const pas = ang.find(a => /^2\. Istri\/Suami/.test(a.hubungan || ''));
+      if (krt && pas && krt.jk && pas.jk && krt.jk === pas.jk) add(galat, 'IV', '29', 'Jenis kelamin Kepala Keluarga & pasangan harus berbeda', 'anggota.' + ang.indexOf(pas) + '.jk');
+      if (!isEmpty(k.jumlahAnggotaKK) && Number(k.jumlahAnggotaKK) !== ang.length) add(peringatan, 'IV', '2b', 'Jumlah anggota hasil pendataan (' + ang.length + ') ≠ jumlah di KK (' + k.jumlahAnggotaKK + ')', 'anggota');
+    }
+    if (isEmpty(k.catatan)) add(kosong, 'V', '-', 'Catatan', 'catatan');
+    return {
+      galat: galat,
+      peringatan: peringatan,
+      kosong: kosong
+    };
+  }
+  canFinalize(k) {
+    return this.validateKeluarga(k || this.state.form).galat.length === 0;
   }
   bukaRiwayat(id) {
     const w = this.state.warga.find(x => x.id === id);
@@ -1453,22 +2202,42 @@ class Component extends React.Component {
       toast: null
     }), 3600);
   }
-  simpan() {
+
+  // Simpan keluarga. status='draft' selalu boleh (tersimpan langsung ke
+  // spreadsheet/lokal); status='final' hanya bila GALAT=0 (gerbang submit).
+  simpanKeluarga(status) {
     if (!this.canCrud()) return;
     const f = this.state.form;
-    if (!f.nama.trim() || !f.nik.trim()) {
+    if (!f.nama || !f.nama.trim()) {
       this.setState({
         toast: {
           type: 'err',
-          msg: 'Nama dan NIK wajib diisi.'
+          msg: 'Nama Kepala Keluarga wajib diisi untuk menyimpan.'
         }
       });
       this.autoClear();
       return;
     }
-    const data = this.formToData(f);
-    const today = this.state.today;
-    const operator = this.opName();
+    if (status === 'final') {
+      const v = this.validateKeluarga(f);
+      if (v.galat.length > 0) {
+        this.setState({
+          toast: {
+            type: 'err',
+            msg: 'Belum bisa difinalisasi: masih ada ' + v.galat.length + ' GALAT yang harus diperbaiki.'
+          }
+        });
+        this.autoClear();
+        return;
+      }
+    }
+    const today = this.state.today,
+      operator = this.opName();
+    const summary = this.deriveSummary(f);
+    const foto = Object.assign({}, f.rumah && f.rumah.foto || this.emptyFoto());
+    const struct = JSON.parse(JSON.stringify(f));
+    delete struct.isNew;
+    delete struct._openIdx;
     const identity = {
       id: f.id,
       noKK: f.noKK,
@@ -1478,21 +2247,23 @@ class Component extends React.Component {
       dusun: f.dusun,
       rt: f.rt,
       rw: f.rw,
-      alamat: f.alamat,
-      anggota: f.anggotaStr.split(',').map(x => x.trim()).filter(Boolean)
+      alamat: f.alamat
     };
-    const foto = Object.assign({}, f.foto);
+    const base = Object.assign({}, struct, identity, summary, {
+      status: status,
+      foto: foto,
+      jumlahAnggotaKK: f.jumlahAnggotaKK || summary.jumlahAnggota
+    });
     this.setState(s => {
       const warga = s.warga.slice();
       const idx = warga.findIndex(w => w.id === f.id);
       const baru = idx < 0;
       if (baru) {
-        warga.push(Object.assign({}, identity, data, {
-          foto: foto,
+        warga.push(Object.assign({}, base, {
           snapshots: [{
             tanggal: today,
             operator: operator,
-            data: data,
+            data: summary,
             foto: foto,
             fieldYangBerubah: []
           }]
@@ -1501,23 +2272,23 @@ class Component extends React.Component {
         const w = warga[idx];
         let snaps = w.snapshots.slice();
         const before = snaps.filter(x => x.tanggal < today).sort((a, b) => a.tanggal < b.tanggal ? 1 : -1)[0];
-        const diff = before ? this.computeDiff(before.data, data) : [];
+        const diff = before ? this.computeDiff(before.data, summary) : [];
         const snap = {
           tanggal: today,
           operator: operator,
-          data: data,
+          data: summary,
           foto: foto,
           fieldYangBerubah: diff
         };
         const si = snaps.findIndex(x => x.tanggal === today);
         if (si >= 0) snaps[si] = snap;else snaps.push(snap);
         snaps.sort((a, b) => a.tanggal < b.tanggal ? -1 : 1);
-        warga[idx] = Object.assign({}, w, identity, data, {
-          foto: foto,
+        warga[idx] = Object.assign({}, w, base, {
           snapshots: snaps
         });
       }
-      const msg = baru ? 'Data warga baru tersimpan.' : 'Perubahan tersimpan. Snapshot ' + this.formatTanggal(today) + ' diperbarui.';
+      const lab = status === 'final' ? 'difinalisasi (Final)' : 'disimpan sebagai draf';
+      const msg = (baru ? 'Keluarga baru ' : 'Perubahan ') + lab + '. Snapshot ' + this.formatTanggal(today) + '.';
       return {
         warga: warga,
         view: 'riwayat',
@@ -1697,6 +2468,7 @@ class Component extends React.Component {
       const bs = this.bansosStyle(w.bansos);
       const last = w.snapshots[w.snapshots.length - 1];
       const pt = last.fieldYangBerubah.length;
+      const draf = w.status === 'draft';
       return {
         id: w.id,
         nama: w.nama,
@@ -1710,6 +2482,9 @@ class Component extends React.Component {
         desilBadgeStyle: 'display:inline-flex;align-items:center;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;color:' + ds.text + ';background:' + ds.bg + ';',
         bansos: w.bansos,
         bansosBadgeStyle: 'display:inline-flex;align-items:center;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;color:' + bs.text + ';background:' + bs.bg + ';',
+        isDraf: draf,
+        statusLabel: draf ? 'Draf' : 'Final',
+        statusBadgeStyle: 'display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;color:' + (draf ? '#92400e' : '#166534') + ';background:' + (draf ? '#fef3c7' : '#dcfce7') + ';border:1px solid ' + (draf ? '#fde68a' : '#bbf7d0') + ';',
         jumlahTanggal: w.snapshots.length,
         adaPerubahanTerakhir: pt > 0,
         perubahanTerakhirStr: pt + ' field berubah',
@@ -1832,50 +2607,20 @@ class Component extends React.Component {
       formDesilLabel = '',
       formDesilStyle = '',
       formDesilHint = '',
-      asetList = [],
-      fotoSlots = [];
+      validasi = {
+        galat: [],
+        peringatan: [],
+        kosong: []
+      },
+      canFinalize = false;
     if (form) {
-      const fd = form.desilManual ? Number(form.desil) : this.hitungDesil({
-        penghasilan: Number(form.penghasilan || 0),
-        lantai: form.lantai,
-        dinding: form.dinding,
-        atap: form.atap,
-        sumberAir: form.sumberAir,
-        penerangan: form.penerangan,
-        aset: form.aset,
-        pekerjaan: form.pekerjaan,
-        pendidikan: form.pendidikan
-      });
+      const fd = form.desilManual ? Number(form.desil || 5) : this.hitungDesil(this.deriveDesilInputs(form));
       const ds = this.getDS(fd);
       formDesilLabel = 'Desil ' + fd;
       formDesilStyle = 'display:inline-flex;align-items:center;padding:8px 18px;border-radius:20px;font-size:18px;font-weight:800;color:' + ds.text + ';background:' + ds.bg + ';';
-      formDesilHint = form.desilManual ? '(input manual)' : 'dihitung otomatis';
-      asetList = this.ASET.map(n => {
-        const ch = form.aset.indexOf(n) >= 0;
-        return {
-          name: n,
-          checked: ch,
-          onToggle: () => this.toggleAset(n),
-          labelStyle: 'display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:1.5px solid ' + (ch ? '#bfcef8' : '#e0e0de') + ';background:' + (ch ? '#eef2fc' : '#fafaf9') + ';color:' + (ch ? '#1e50d0' : '#3d4152') + ';'
-        };
-      });
-      const sl = [['depan', 'Tampak Depan Rumah'], ['ruangTamu', 'Ruang Tamu'], ['kamarMandi', 'Kamar Mandi']];
-      fotoSlots = sl.map(s => {
-        const ft = form.foto[s[0]];
-        const has = !!(ft && ft.src);
-        return {
-          key: s[0],
-          label: s[1],
-          hasFoto: has,
-          kosong: !has,
-          src: has ? ft.src : '',
-          beforeStr: has ? this.formatBytes(ft.before) : '',
-          afterStr: has ? this.formatBytes(ft.after) : '',
-          ratio: has ? Math.round((1 - ft.after / ft.before) * 100) + '%' : '',
-          onUpload: e => this.handleFoto(s[0], e),
-          onHapus: () => this.hapusFoto(s[0])
-        };
-      });
+      formDesilHint = form.desilManual ? '(input manual)' : 'dihitung otomatis dari isian';
+      validasi = this.validateKeluarga(form);
+      canFinalize = validasi.galat.length === 0;
     }
     let riwayatWarga = null,
       snapshotList = [],
@@ -2062,39 +2807,14 @@ class Component extends React.Component {
       desilBars: desilBars,
       perubahanList: perubahanList,
       tidakAdaPerubahan: perubahanList.length === 0,
-      form: form || {
-        noKK: '',
-        nik: '',
-        nama: '',
-        dusun: '',
-        rt: '',
-        rw: '',
-        alamat: '',
-        anggotaStr: '',
-        jumlahAnggota: '',
-        disabilitas: 'Tidak Ada',
-        pekerjaan: '',
-        pendidikan: '',
-        penghasilan: '',
-        statusRumah: '',
-        lantai: '',
-        dinding: '',
-        atap: '',
-        sumberAir: '',
-        penerangan: '',
-        aset: [],
-        bansos: '',
-        desilManual: false,
-        desil: '',
-        foto: this.emptyFoto()
-      },
+      form: form,
       formDesilLabel: formDesilLabel,
       formDesilStyle: formDesilStyle,
       formDesilHint: formDesilHint,
-      asetList: asetList,
-      fotoSlots: fotoSlots,
-      onFormChange: e => this.onFormChange(e),
-      onSimpan: () => this.simpan(),
+      validasi: validasi,
+      canFinalize: canFinalize,
+      onSimpanDraf: () => this.simpanKeluarga('draft'),
+      onFinalisasi: () => this.simpanKeluarga('final'),
       onBatal: () => this.onBatal(),
       riwayatWarga: riwayatWarga,
       snapshotList: snapshotList,
@@ -2202,6 +2922,477 @@ class Component extends React.Component {
     }, d.u, " / ", d.p))))), /*#__PURE__*/React.createElement("div", {
       style: css('text-align:center; font-size:11px; font-weight:700; color:#92400e; letter-spacing:0.03em;')
     }, "PROTOTYPE · autentikasi demo sisi-klien")));
+  }
+
+  // -- Render satu field FASIH (radio/select/number/rupiah/text) ---------------
+  field(o) {
+    const lab = 'display:block;font-size:12.5px;font-weight:600;color:#3d4152;margin-bottom:7px;line-height:1.45;';
+    const inp = 'width:100%;padding:9px 11px;border:1.5px solid #e0e0de;border-radius:8px;font-family:inherit;font-size:13.5px;color:#18191f;background:#fff;';
+    const head = /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('color:#9ba2b6;font-weight:700;margin-right:5px;')
+    }, o.r, "."), o.label, o.req ? /*#__PURE__*/React.createElement("span", {
+      style: css('color:#dc2626;')
+    }, " *") : null);
+    let control;
+    if (o.type === 'radio') {
+      control = /*#__PURE__*/React.createElement("div", {
+        style: css('display:flex;flex-direction:column;gap:5px;')
+      }, o.opts.map((opt, i) => {
+        const on = o.value === opt;
+        return /*#__PURE__*/React.createElement("label", {
+          key: i,
+          onClick: () => this.setForm(o.p, opt),
+          style: css('display:flex;align-items:center;gap:9px;padding:7px 11px;border-radius:8px;cursor:pointer;font-size:13px;border:1.5px solid ' + (on ? '#bfcef8' : '#ececea') + ';background:' + (on ? '#eef2fc' : '#fafaf9') + ';color:' + (on ? '#1e50d0' : '#3d4152') + ';font-weight:' + (on ? '700' : '500') + ';')
+        }, /*#__PURE__*/React.createElement("span", {
+          style: css('flex:none;width:15px;height:15px;border-radius:50%;border:2px solid ' + (on ? '#1e50d0' : '#c4c8d4') + ';background:' + (on ? 'radial-gradient(circle, #1e50d0 0 4px, #fff 5px)' : '#fff') + ';')
+        }), opt);
+      }));
+    } else if (o.type === 'select') {
+      control = /*#__PURE__*/React.createElement("select", {
+        value: o.value || '',
+        onChange: e => this.setForm(o.p, e.target.value),
+        style: css(inp + 'cursor:pointer;')
+      }, /*#__PURE__*/React.createElement("option", {
+        value: ""
+      }, "— pilih —"), o.opts.map((opt, i) => /*#__PURE__*/React.createElement("option", {
+        key: i,
+        value: opt
+      }, opt)));
+    } else {
+      const isNum = o.type === 'number' || o.type === 'rupiah';
+      control = /*#__PURE__*/React.createElement("input", {
+        value: o.value == null ? '' : o.value,
+        onChange: e => this.setForm(o.p, isNum ? e.target.value.replace(/[^0-9]/g, '') : e.target.value),
+        placeholder: o.type === 'rupiah' ? 'Rp …' : '',
+        style: css(inp)
+      });
+    }
+    return /*#__PURE__*/React.createElement("div", {
+      key: o.p,
+      id: 'f_' + o.p,
+      style: css('margin-bottom:2px;')
+    }, head, control);
+  }
+  // Item Ya/Tidak (R38 disabilitas a–f, R39 keluhan kesehatan a–r).
+  yt(path, label, value) {
+    return /*#__PURE__*/React.createElement("div", {
+      key: path,
+      style: css('display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 2px;border-bottom:1px solid #f3f3f1;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:12.5px;color:#3d4152;flex:1;')
+    }, label), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;gap:6px;flex:none;')
+    }, ['1. Ya', '2. Tidak'].map(opt => {
+      const on = value === opt;
+      const ya = /Ya/.test(opt);
+      return /*#__PURE__*/React.createElement("button", {
+        key: opt,
+        onClick: () => this.setForm(path, opt),
+        style: css('padding:4px 13px;border-radius:7px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid ' + (on ? ya ? '#f0b4b4' : '#bfcef8' : '#e0e0de') + ';background:' + (on ? ya ? '#fdecec' : '#eef2fc' : '#fff') + ';color:' + (on ? ya ? '#b91c1c' : '#1e50d0' : '#9ba2b6') + ';')
+      }, ya ? 'Ya' : 'Tidak');
+    })));
+  }
+  renderForm(V) {
+    const k = V.form,
+      val = V.validasi;
+    const card = 'background:#fff; border-radius:14px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);';
+    const lab = 'display:block;font-size:12.5px;font-weight:600;color:#3d4152;margin-bottom:6px;';
+    const inp = 'width:100%;padding:9px 11px;border:1.5px solid #e0e0de;border-radius:8px;font-family:inherit;font-size:13.5px;color:#18191f;background:#fff;';
+    const grid = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;';
+    const head = (rom, title, extra) => /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #f0f0ee;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:14px;font-weight:800;color:#18191f;letter-spacing:-0.01em;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('color:#1e50d0;')
+    }, rom), " · ", title), extra || null);
+    const txt = (p, label, ph) => {
+      const v = getPath(k, p);
+      return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+        style: css(lab)
+      }, label), /*#__PURE__*/React.createElement("input", {
+        value: v == null ? '' : v,
+        onChange: e => this.setForm(p, e.target.value),
+        placeholder: ph || '',
+        style: css(inp)
+      }));
+    };
+    const fields = arr => arr.filter(d => !d.when || d.when(k)).map(d => this.field({
+      p: d.p,
+      r: d.r,
+      label: d.label,
+      type: d.type,
+      opts: d.opts,
+      req: d.req,
+      value: getPath(k, d.p)
+    }));
+    const pakaiMeteran = /dengan meteran/.test(getPath(k, 'rumah.sumberPenerangan') || '');
+    const chip = (label, n, color, bg) => /*#__PURE__*/React.createElement("div", {
+      style: css('flex:1;min-width:96px;display:flex;flex-direction:column;gap:2px;padding:10px 13px;border-radius:10px;background:' + bg + ';border:1px solid ' + color + '33;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:22px;font-weight:800;color:' + color + ';line-height:1;')
+    }, n), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11px;font-weight:700;color:' + color + ';text-transform:uppercase;letter-spacing:0.04em;')
+    }, label));
+
+    // Roster meteran (R18)
+    const meteran = (k.meteran || []).map((m, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: css('background:#fafaf9;border:1px solid #ececea;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:12.5px;font-weight:800;color:#1e50d0;')
+    }, "Meteran ke-", i + 1), this.field({
+      p: 'meteran.' + i + '.daya',
+      r: '18b',
+      label: 'Daya yang terpasang di rumah ini',
+      type: 'radio',
+      opts: KODE.daya,
+      req: true,
+      value: m.daya
+    }), /*#__PURE__*/React.createElement("div", {
+      style: css('display:grid;grid-template-columns:1fr 1.3fr;gap:10px;')
+    }, this.field({
+      p: 'meteran.' + i + '.jenisId',
+      r: '18c',
+      label: 'Jenis nomor',
+      type: 'select',
+      opts: KODE.jenisIdMeteran,
+      req: true,
+      value: m.jenisId
+    }), this.field({
+      p: 'meteran.' + i + '.idPelanggan',
+      r: '18c',
+      label: /No Meteran/.test(m.jenisId || '') ? 'No Meteran (11 digit)' : 'ID Pelanggan PLN (12 digit)',
+      type: 'number',
+      req: true,
+      value: m.idPelanggan
+    }))));
+
+    // Roster anggota (Blok IV)
+    const anggota = (k.anggota || []).map((a, i) => {
+      const open = k._openIdx === i;
+      const base = 'anggota.' + i + '.';
+      const headerRow = /*#__PURE__*/React.createElement("div", {
+        style: css('display:flex;align-items:center;justify-content:space-between;gap:10px;')
+      }, /*#__PURE__*/React.createElement("button", {
+        onClick: () => this.toggleOpenAnggota(i),
+        style: css('flex:1;text-align:left;background:none;border:none;cursor:pointer;font-family:inherit;display:flex;flex-direction:column;gap:2px;padding:0;')
+      }, /*#__PURE__*/React.createElement("span", {
+        style: css('font-size:13.5px;font-weight:800;color:#18191f;')
+      }, open ? '▾' : '▸', " ", i + 1, ". ", a.nama || '(anggota baru)'), /*#__PURE__*/React.createElement("span", {
+        style: css('font-size:11.5px;color:#9ba2b6;')
+      }, a.hubungan || '—', " · ", a.jk || '—')), k.anggota.length > 1 && /*#__PURE__*/React.createElement("button", {
+        onClick: () => this.hapusAnggota(i),
+        style: css('flex:none;font-size:11.5px;font-weight:700;color:#b91c1c;background:#fef2f2;border:1px solid #f3c9c9;border-radius:7px;padding:5px 10px;cursor:pointer;font-family:inherit;')
+      }, "Hapus"));
+      if (!open) return /*#__PURE__*/React.createElement("div", {
+        key: i,
+        style: css('background:#fafaf9;border:1px solid #ececea;border-radius:10px;padding:12px 14px;')
+      }, headerRow);
+      return /*#__PURE__*/React.createElement("div", {
+        key: i,
+        style: css('background:#fafaf9;border:1.5px solid #d7e0f5;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:12px;')
+      }, headerRow, /*#__PURE__*/React.createElement("div", {
+        style: css('font-size:11px;color:#9ba2b6;')
+      }, "R24. Nomor Urut Anggota: ", /*#__PURE__*/React.createElement("strong", {
+        style: css('color:#52576b;')
+      }, a.no || i + 1)), ANGGOTA_FIELDS.filter(d => !d.when || d.when(k, a)).map(d => this.field({
+        p: base + d.rp,
+        r: d.r,
+        label: d.label,
+        type: d.type,
+        opts: d.opts,
+        req: d.req,
+        value: a[d.rp]
+      })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+        style: css(lab)
+      }, /*#__PURE__*/React.createElement("span", {
+        style: css('color:#9ba2b6;font-weight:700;margin-right:5px;')
+      }, "30."), "Tanggal Lahir", /*#__PURE__*/React.createElement("span", {
+        style: css('color:#dc2626;')
+      }, " *")), /*#__PURE__*/React.createElement("div", {
+        style: css('display:grid;grid-template-columns:1fr 1.4fr 1fr 1fr;gap:8px;')
+      }, /*#__PURE__*/React.createElement("input", {
+        value: a.tglLahir || '',
+        onChange: e => this.setForm(base + 'tglLahir', e.target.value.replace(/[^0-9]/g, '')),
+        placeholder: "Tgl",
+        style: css(inp)
+      }), /*#__PURE__*/React.createElement("select", {
+        value: a.blnLahir || '',
+        onChange: e => this.setForm(base + 'blnLahir', e.target.value),
+        style: css(inp + 'cursor:pointer;')
+      }, /*#__PURE__*/React.createElement("option", {
+        value: ""
+      }, "Bulan"), KODE.bulan.map((b, j) => /*#__PURE__*/React.createElement("option", {
+        key: j,
+        value: b
+      }, b))), /*#__PURE__*/React.createElement("input", {
+        value: a.thnLahir || '',
+        onChange: e => this.setForm(base + 'thnLahir', e.target.value.replace(/[^0-9]/g, '')),
+        placeholder: "Thn",
+        style: css(inp)
+      }), /*#__PURE__*/React.createElement("input", {
+        value: a.umur || '',
+        onChange: e => this.setForm(base + 'umur', e.target.value.replace(/[^0-9]/g, '')),
+        placeholder: "Umur",
+        style: css(inp)
+      }))), /*#__PURE__*/React.createElement("div", {
+        style: css('background:#fff;border:1px solid #ececea;border-radius:10px;padding:12px 14px;')
+      }, /*#__PURE__*/React.createElement("div", {
+        style: css('font-size:12px;font-weight:800;color:#52576b;margin-bottom:6px;')
+      }, "38. Disabilitas (jangka waktu lama)"), DISABILITAS_ITEMS.map(it => this.yt(base + 'disabilitas.' + it[0], it[1], getPath(a, 'disabilitas.' + it[0])))), /*#__PURE__*/React.createElement("div", {
+        style: css('background:#fff;border:1px solid #ececea;border-radius:10px;padding:12px 14px;')
+      }, /*#__PURE__*/React.createElement("div", {
+        style: css('font-size:12px;font-weight:800;color:#52576b;margin-bottom:6px;')
+      }, "39. Keluhan kesehatan kronis/menahun"), KESEHATAN_ITEMS.map(it => this.yt(base + 'kesehatan.' + it[0], it[1], getPath(a, 'kesehatan.' + it[0])))));
+    });
+
+    // Foto rumah (R21)
+    const fotoSlot = (slot, label, req) => {
+      const ft = getPath(k, 'rumah.foto.' + slot);
+      const has = !!(ft && ft.src);
+      return /*#__PURE__*/React.createElement("div", {
+        key: slot,
+        style: css('display:flex;flex-direction:column;gap:7px;')
+      }, /*#__PURE__*/React.createElement("span", {
+        style: css('font-size:12px;font-weight:600;color:#52576b;')
+      }, label, req ? /*#__PURE__*/React.createElement("span", {
+        style: css('color:#dc2626;')
+      }, " *") : /*#__PURE__*/React.createElement("span", {
+        style: css('color:#9ba2b6;')
+      }, " (opsional)")), has ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+        style: css('height:140px;border-radius:10px;overflow:hidden;background:#0c1422;')
+      }, /*#__PURE__*/React.createElement("img", {
+        src: ft.src,
+        style: css('width:100%;height:100%;object-fit:cover;display:block;')
+      })), /*#__PURE__*/React.createElement("div", {
+        style: css('display:flex;justify-content:space-between;align-items:center;margin-top:6px;')
+      }, /*#__PURE__*/React.createElement("span", {
+        style: css('font-size:10.5px;color:#52576b;font-family:Menlo,monospace;')
+      }, this.formatBytes(ft.before), " → ", this.formatBytes(ft.after)), /*#__PURE__*/React.createElement("button", {
+        onClick: () => this.hapusFoto('rumah.foto.' + slot),
+        style: css('font-size:11.5px;color:#dc2626;background:none;border:none;cursor:pointer;font-weight:700;font-family:inherit;padding:0;')
+      }, "Hapus"))) : /*#__PURE__*/React.createElement("label", {
+        style: css('display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:140px;border:1.5px dashed #d4d4d0;border-radius:10px;background:repeating-linear-gradient(45deg,#f7f7f5,#f7f7f5 8px,#fafaf9 8px,#fafaf9 16px);cursor:pointer;text-align:center;padding:12px;')
+      }, /*#__PURE__*/React.createElement("span", {
+        style: css('font-size:13px;font-weight:700;color:#52576b;')
+      }, "Unggah Foto"), /*#__PURE__*/React.createElement("span", {
+        style: css('font-size:10.5px;color:#9ba2b6;font-family:Menlo,monospace;')
+      }, "auto-kompres <200 KB"), /*#__PURE__*/React.createElement("input", {
+        type: "file",
+        accept: "image/*",
+        onChange: e => this.handleFoto('rumah.foto.' + slot, e),
+        style: css('display:none;')
+      })));
+    };
+    return /*#__PURE__*/React.createElement("div", {
+      style: css('max-width:920px; animation:fadein 0.2s ease;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('background:#fff;border-radius:14px;padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);margin-bottom:16px;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:14px;font-weight:800;color:#18191f;')
+    }, "Ringkasan"), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:20px;' + (V.canFinalize ? 'color:#166534;background:#dcfce7;border:1px solid #bbf7d0;' : 'color:#b91c1c;background:#fef2f2;border:1px solid #fca5a5;'))
+    }, V.canFinalize ? 'Siap difinalisasi' : 'Belum bisa finalisasi')), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;gap:10px;flex-wrap:wrap;')
+    }, chip('Galat', val.galat.length, '#dc2626', '#fef2f2'), chip('Peringatan', val.peringatan.length, '#d97706', '#fffbeb'), chip('Kosong', val.kosong.length, '#6b7280', '#f3f4f6')), val.galat.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: css('margin-top:12px;max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;')
+    }, val.galat.slice(0, 40).map((g, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: css('font-size:12px;color:#7f1d1d;background:#fef2f2;border:1px solid #fde0e0;border-radius:7px;padding:6px 10px;')
+    }, /*#__PURE__*/React.createElement("strong", {
+      style: css('color:#b91c1c;')
+    }, "Blok ", g.blok, " · R", g.rincian), " — ", g.label)))), /*#__PURE__*/React.createElement("div", {
+      style: css(card + 'margin-bottom:14px;'),
+      id: "blok-1"
+    }, head('I', 'Keterangan Identitas Keluarga'), /*#__PURE__*/React.createElement("div", {
+      style: css(grid)
+    }, txt('noKK', 'No. Kartu Keluarga (16 digit)', '5108…'), txt('nik', 'NIK Kepala Keluarga (16 digit)', '5108…'), /*#__PURE__*/React.createElement("div", {
+      style: css('grid-column:1/-1;')
+    }, txt('nama', 'Nama Kepala Keluarga')), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Desa/Kelurahan"), /*#__PURE__*/React.createElement("select", {
+      value: k.desa || '',
+      onChange: e => this.setForm('desa', e.target.value),
+      style: css(inp + 'cursor:pointer;')
+    }, /*#__PURE__*/React.createElement("option", null, "Desa Sambirenteng"), /*#__PURE__*/React.createElement("option", null, "Desa Penuktukan"), /*#__PURE__*/React.createElement("option", null, "Desa Tembok"))), txt('dusun', 'Banjar Dinas / Dusun (SLS)', 'mis. Banjar Dinas Tembok'), txt('wilayah.namaJalan', 'Nama Jalan'), txt('wilayah.nomorRumah', 'Nomor Rumah (isi "-" bila tidak ada)'), txt('wilayah.kodePos', 'Kode Pos'), /*#__PURE__*/React.createElement("div", {
+      style: css('display:grid;grid-template-columns:1fr 1fr;gap:12px;')
+    }, txt('rt', 'RT'), txt('rw', 'RW')), txt('jumlahAnggotaKK', 'Jumlah anggota sesuai KK')), /*#__PURE__*/React.createElement("div", {
+      style: css('margin-top:14px;display:flex;flex-direction:column;gap:14px;')
+    }, this.field({
+      p: 'statusKeluarga',
+      r: '16',
+      label: 'Status Keberadaan Keluarga',
+      type: 'radio',
+      opts: KODE.statusKeluarga,
+      req: true,
+      value: k.statusKeluarga
+    }), this.field({
+      p: 'alamatSesuaiKK',
+      r: '4',
+      label: 'Apakah alamat sesuai dengan alamat pada Kartu Keluarga?',
+      type: 'radio',
+      opts: KODE.alamatSesuaiKK,
+      req: true,
+      value: k.alamatSesuaiKK
+    }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('color:#9ba2b6;font-weight:700;margin-right:5px;')
+    }, "3l."), "Geotagging lokasi (Latitude / Longitude / Akurasi)"), /*#__PURE__*/React.createElement("div", {
+      style: css('display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;')
+    }, /*#__PURE__*/React.createElement("input", {
+      value: getPath(k, 'geotag.lat') || '',
+      onChange: e => this.setForm('geotag.lat', e.target.value),
+      placeholder: "Latitude",
+      style: css(inp)
+    }), /*#__PURE__*/React.createElement("input", {
+      value: getPath(k, 'geotag.long') || '',
+      onChange: e => this.setForm('geotag.long', e.target.value),
+      placeholder: "Longitude",
+      style: css(inp)
+    }), /*#__PURE__*/React.createElement("input", {
+      value: getPath(k, 'geotag.akurasi') || '',
+      onChange: e => this.setForm('geotag.akurasi', e.target.value),
+      placeholder: "Akurasi (m)",
+      style: css(inp)
+    }))))), /*#__PURE__*/React.createElement("div", {
+      style: css(card + 'margin-bottom:14px;'),
+      id: "blok-2"
+    }, head('II', 'Keterangan Perumahan'), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;flex-direction:column;gap:16px;')
+    }, fields(BLOK2), /*#__PURE__*/React.createElement("div", {
+      style: css('background:#f7f8fb;border:1px solid #e4e9f4;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:12px;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:13px;font-weight:800;color:#18191f;')
+    }, "18a. Roster Meteran Listrik"), /*#__PURE__*/React.createElement("label", {
+      style: css('display:flex;align-items:center;gap:8px;font-size:12.5px;color:#3d4152;')
+    }, "Jumlah meteran", /*#__PURE__*/React.createElement("input", {
+      value: (k.meteran || []).length,
+      onChange: e => this.setJumlahMeteran(e.target.value),
+      style: css('width:64px;padding:7px 9px;border:1.5px solid #e0e0de;border-radius:8px;font-family:inherit;font-size:13.5px;text-align:center;')
+    }))), pakaiMeteran ? meteran.length ? meteran : /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:12px;color:#9ba2b6;')
+    }, "Setel jumlah meteran ≥ 1 (sumber penerangan = PLN dengan meteran).") : /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:12px;color:#9ba2b6;')
+    }, "Roster meteran hanya untuk \"Listrik PLN dengan meteran\".")), fields(BLOK2B), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:13px;font-weight:800;color:#18191f;margin-bottom:4px;')
+    }, "21. Foto Rumah"), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:11.5px;color:#9ba2b6;margin-bottom:12px;')
+    }, "Tampak depan & ruang tamu wajib · dikompres otomatis di perangkat (≤1024px, target <200KB)"), /*#__PURE__*/React.createElement("div", {
+      style: css('display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;')
+    }, fotoSlot('depan', 'a. Tampak depan (atap & dinding)', true), fotoSlot('ruangTamu', 'b. Ruang tamu (dinding & lantai)', true), fotoSlot('kamarMandi', 'c. Kamar mandi (kloset)', false))))), /*#__PURE__*/React.createElement("div", {
+      style: css(card + 'margin-bottom:14px;'),
+      id: "blok-3"
+    }, head('III', 'Keterangan Kepemilikan Aset'), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:12.5px;font-weight:700;color:#52576b;margin-bottom:10px;')
+    }, "22. Aset bergerak — jumlah yang dimiliki"), /*#__PURE__*/React.createElement("div", {
+      style: css(grid)
+    }, ASET22.map(a => this.field({
+      p: 'aset.' + a[0],
+      r: '22',
+      label: a[1] + ' (' + a[2] + ')',
+      type: 'number',
+      req: true,
+      value: getPath(k, 'aset.' + a[0])
+    })), Number(getPath(k, 'aset.sepedaMotor')) > 0 && this.field({
+      p: 'aset.nilaiSepedaMotor',
+      r: '22g',
+      label: 'Total nilai aset sepeda motor',
+      type: 'rupiah',
+      req: true,
+      value: getPath(k, 'aset.nilaiSepedaMotor')
+    }), Number(getPath(k, 'aset.mobil')) > 0 && this.field({
+      p: 'aset.nilaiMobil',
+      r: '22h',
+      label: 'Total nilai aset mobil',
+      type: 'rupiah',
+      req: true,
+      value: getPath(k, 'aset.nilaiMobil')
+    })), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:12.5px;font-weight:700;color:#52576b;margin:16px 0 10px;')
+    }, "23. Aset tidak bergerak"), /*#__PURE__*/React.createElement("div", {
+      style: css(grid)
+    }, ASET23.map(a => this.field({
+      p: 'aset.' + a[0],
+      r: '23',
+      label: a[1],
+      type: 'number',
+      req: true,
+      value: getPath(k, 'aset.' + a[0])
+    })))), /*#__PURE__*/React.createElement("div", {
+      style: css(card + 'margin-bottom:14px;'),
+      id: "blok-4"
+    }, head('IV', 'Keterangan Anggota Keluarga', /*#__PURE__*/React.createElement("button", {
+      onClick: () => this.tambahAnggota(),
+      style: css('font-size:12.5px;font-weight:700;color:#fff;background:#1e50d0;border:none;border-radius:8px;padding:7px 13px;cursor:pointer;font-family:inherit;')
+    }, "+ Tambah Anggota")), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;flex-direction:column;gap:10px;')
+    }, anggota)), /*#__PURE__*/React.createElement("div", {
+      style: css(card + 'margin-bottom:14px;'),
+      id: "blok-5"
+    }, head('V', 'Catatan'), /*#__PURE__*/React.createElement("textarea", {
+      value: k.catatan || '',
+      onChange: e => this.setForm('catatan', e.target.value),
+      placeholder: "Catatan pencacah (opsional)…",
+      style: css('width:100%;padding:10px 12px;border:1.5px solid #e0e0de;border-radius:9px;font-size:13.5px;color:#18191f;background:#fff;height:74px;resize:vertical;line-height:1.6;font-family:inherit;')
+    }), /*#__PURE__*/React.createElement("div", {
+      style: css('margin-top:16px;padding-top:14px;border-top:1px solid #f0f0ee;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:12.5px;font-weight:800;color:#52576b;margin-bottom:10px;')
+    }, "Penetapan Desa (internal — bukan bagian kuesioner)"), /*#__PURE__*/React.createElement("div", {
+      style: css('display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;align-items:start;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;flex-direction:column;gap:10px;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;align-items:center;gap:12px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css(V.formDesilStyle)
+    }, V.formDesilLabel), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:12px;color:#9ba2b6;font-style:italic;')
+    }, V.formDesilHint)), /*#__PURE__*/React.createElement("label", {
+      style: css('display:flex;align-items:center;gap:9px;font-size:13px;color:#3d4152;cursor:pointer;')
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "checkbox",
+      checked: !!k.desilManual,
+      onChange: e => this.setForm('desilManual', e.target.checked),
+      style: css('width:15px;height:15px;accent-color:#1e50d0;cursor:pointer;')
+    }), "Override desil manual"), k.desilManual && /*#__PURE__*/React.createElement("select", {
+      value: k.desil,
+      onChange: e => this.setForm('desil', e.target.value),
+      style: css('width:160px;' + inp + 'cursor:pointer;')
+    }, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(d => /*#__PURE__*/React.createElement("option", {
+      key: d,
+      value: String(d)
+    }, "Desil ", d)))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Status Penerima Bansos"), /*#__PURE__*/React.createElement("select", {
+      value: k.bansos || 'Tidak Ada',
+      onChange: e => this.setForm('bansos', e.target.value),
+      style: css(inp + 'cursor:pointer;')
+    }, /*#__PURE__*/React.createElement("option", null, "Tidak Ada"), /*#__PURE__*/React.createElement("option", null, "PKH"), /*#__PURE__*/React.createElement("option", null, "BPNT"), /*#__PURE__*/React.createElement("option", null, "PKH + BPNT")))))), /*#__PURE__*/React.createElement("div", {
+      style: css('position:sticky;bottom:0;background:#f5f5f2;padding:14px 0;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px solid #e8e8e6;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:12px;color:' + (V.canFinalize ? '#166534' : '#b45309') + ';font-weight:600;')
+    }, V.canFinalize ? 'Tidak ada galat — siap difinalisasi.' : val.galat.length + ' galat harus diperbaiki sebelum finalisasi.'), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;gap:10px;flex-wrap:wrap;')
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: V.onBatal,
+      style: css('padding:11px 18px;font-family:inherit;font-size:13.5px;font-weight:600;border:1.5px solid #e0e0de;background:#fff;color:#3d4152;border-radius:9px;cursor:pointer;')
+    }, "Batal"), /*#__PURE__*/React.createElement("button", {
+      onClick: V.onSimpanDraf,
+      style: css('padding:11px 20px;font-family:inherit;font-size:13.5px;font-weight:700;border:1.5px solid #c7d7f6;background:#eef2fc;color:#1e50d0;border-radius:9px;cursor:pointer;')
+    }, "Simpan Draf"), /*#__PURE__*/React.createElement("button", {
+      onClick: V.canFinalize ? V.onFinalisasi : undefined,
+      disabled: !V.canFinalize,
+      style: css('padding:11px 24px;font-family:inherit;font-size:13.5px;font-weight:700;border:none;border-radius:9px;color:#fff;background:' + (V.canFinalize ? '#16a34a' : '#cbd5e1') + ';cursor:' + (V.canFinalize ? 'pointer' : 'not-allowed') + ';')
+    }, "Submit / Finalisasi"))));
   }
   render() {
     if (!this.state.auth) {
@@ -2428,8 +3619,12 @@ class Component extends React.Component {
     }, /*#__PURE__*/React.createElement("td", {
       style: css('padding:13px 16px; vertical-align:middle;')
     }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; align-items:center; gap:7px;')
+    }, /*#__PURE__*/React.createElement("span", {
       style: css('font-size:13.5px; font-weight:700; color:#18191f;')
-    }, w.nama), /*#__PURE__*/React.createElement("div", {
+    }, w.nama), /*#__PURE__*/React.createElement("span", {
+      style: css(w.statusBadgeStyle)
+    }, w.statusLabel)), /*#__PURE__*/React.createElement("div", {
       style: css('font-size:11px; color:#9ba2b6; margin-top:2px; font-variant-numeric:tabular-nums;')
     }, w.nik)), /*#__PURE__*/React.createElement("td", {
       style: css('padding:13px 16px; vertical-align:middle;')
@@ -2473,296 +3668,7 @@ class Component extends React.Component {
       style: css('padding:40px; text-align:center; color:#9ba2b6; font-size:13.5px;')
     }, "Tidak ada rumah tangga yang cocok.")), /*#__PURE__*/React.createElement("span", {
       style: css('font-size:12px; color:#9ba2b6;')
-    }, "Menampilkan ", V.jumlahTampil, " dari ", V.jumlahTotal, " rumah tangga")), V.isForm && /*#__PURE__*/React.createElement("div", {
-      style: css('max-width:880px; animation:fadein 0.2s ease;')
-    }, /*#__PURE__*/React.createElement("div", {
-      style: css('display:flex; align-items:flex-start; gap:8px; background:#eef2fc; border:1px solid #c7d7f6; border-radius:10px; padding:12px 15px; margin-bottom:18px; font-size:12.5px; color:#1a3f99; line-height:1.5;')
-    }, /*#__PURE__*/React.createElement("span", {
-      style: css('font-weight:700; white-space:nowrap;')
-    }, "Snapshot:"), /*#__PURE__*/React.createElement("span", null, "Simpan akan membuat / menimpa snapshot tanggal ", /*#__PURE__*/React.createElement("strong", null, V.tanggalHariIni), ". Perbedaan dengan hari sebelumnya tercatat otomatis di Riwayat.")), /*#__PURE__*/React.createElement("div", {
-      style: css('display:flex; flex-direction:column; gap:14px;')
-    }, /*#__PURE__*/React.createElement("div", {
-      style: css(card)
-    }, /*#__PURE__*/React.createElement("span", {
-      style: css('font-size:13.5px; font-weight:700; color:#18191f; display:block; margin-bottom:18px; padding-bottom:12px; border-bottom:1px solid #f0f0ee;')
-    }, "1 · Identitas Keluarga"), /*#__PURE__*/React.createElement("div", {
-      style: css('display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px;')
-    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "No. Kartu Keluarga"), /*#__PURE__*/React.createElement("input", {
-      "data-field": "noKK",
-      value: V.form.noKK,
-      onChange: V.onFormChange,
-      style: css(inp)
-    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "NIK Kepala Keluarga"), /*#__PURE__*/React.createElement("input", {
-      "data-field": "nik",
-      value: V.form.nik,
-      onChange: V.onFormChange,
-      style: css(inp)
-    })), /*#__PURE__*/React.createElement("div", {
-      style: css('grid-column:1/-1;')
-    }, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "Nama Kepala Keluarga"), /*#__PURE__*/React.createElement("input", {
-      "data-field": "nama",
-      value: V.form.nama,
-      onChange: V.onFormChange,
-      style: css(inp)
-    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "Desa"), /*#__PURE__*/React.createElement("select", {
-      "data-field": "desa",
-      value: V.form.desa,
-      onChange: V.onFormChange,
-      style: css(inpSel)
-    }, /*#__PURE__*/React.createElement("option", null, "Desa Sambirenteng"), /*#__PURE__*/React.createElement("option", null, "Desa Penuktukan"), /*#__PURE__*/React.createElement("option", null, "Desa Tembok"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "Banjar Dinas / Dusun"), /*#__PURE__*/React.createElement("input", {
-      "data-field": "dusun",
-      value: V.form.dusun,
-      onChange: V.onFormChange,
-      placeholder: "mis. Banjar Dinas Tembok",
-      style: css(inp)
-    })), /*#__PURE__*/React.createElement("div", {
-      style: css('display:grid;grid-template-columns:1fr 1fr;gap:12px;')
-    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "RT"), /*#__PURE__*/React.createElement("input", {
-      "data-field": "rt",
-      value: V.form.rt,
-      onChange: V.onFormChange,
-      style: css(inp)
-    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "RW"), /*#__PURE__*/React.createElement("input", {
-      "data-field": "rw",
-      value: V.form.rw,
-      onChange: V.onFormChange,
-      style: css(inp)
-    }))), /*#__PURE__*/React.createElement("div", {
-      style: css('grid-column:1/-1;')
-    }, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "Alamat"), /*#__PURE__*/React.createElement("input", {
-      "data-field": "alamat",
-      value: V.form.alamat,
-      onChange: V.onFormChange,
-      style: css(inp)
-    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "Jumlah Anggota"), /*#__PURE__*/React.createElement("input", {
-      type: "number",
-      "data-field": "jumlahAnggota",
-      value: V.form.jumlahAnggota,
-      onChange: V.onFormChange,
-      style: css(inp)
-    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "Status Disabilitas"), /*#__PURE__*/React.createElement("select", {
-      "data-field": "disabilitas",
-      value: V.form.disabilitas,
-      onChange: V.onFormChange,
-      style: css(inpSel)
-    }, /*#__PURE__*/React.createElement("option", null, "Tidak Ada"), /*#__PURE__*/React.createElement("option", null, "Ada"))), /*#__PURE__*/React.createElement("div", {
-      style: css('grid-column:1/-1;')
-    }, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "Nama Anggota (pisahkan koma)"), /*#__PURE__*/React.createElement("input", {
-      "data-field": "anggotaStr",
-      value: V.form.anggotaStr,
-      onChange: V.onFormChange,
-      style: css(inp)
-    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "Pekerjaan"), /*#__PURE__*/React.createElement("select", {
-      "data-field": "pekerjaan",
-      value: V.form.pekerjaan,
-      onChange: V.onFormChange,
-      style: css(inpSel)
-    }, /*#__PURE__*/React.createElement("option", null, "Tidak Bekerja"), /*#__PURE__*/React.createElement("option", null, "Buruh Tani"), /*#__PURE__*/React.createElement("option", null, "Buruh Harian"), /*#__PURE__*/React.createElement("option", null, "Petani"), /*#__PURE__*/React.createElement("option", null, "Pedagang"), /*#__PURE__*/React.createElement("option", null, "Nelayan"), /*#__PURE__*/React.createElement("option", null, "Tukang Bangunan"), /*#__PURE__*/React.createElement("option", null, "Pengrajin"), /*#__PURE__*/React.createElement("option", null, "Sopir"), /*#__PURE__*/React.createElement("option", null, "Guru Honorer"), /*#__PURE__*/React.createElement("option", null, "Wiraswasta"), /*#__PURE__*/React.createElement("option", null, "PNS"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "Pendidikan Terakhir"), /*#__PURE__*/React.createElement("select", {
-      "data-field": "pendidikan",
-      value: V.form.pendidikan,
-      onChange: V.onFormChange,
-      style: css(inpSel)
-    }, /*#__PURE__*/React.createElement("option", null, "Tidak Sekolah"), /*#__PURE__*/React.createElement("option", null, "SD"), /*#__PURE__*/React.createElement("option", null, "SMP"), /*#__PURE__*/React.createElement("option", null, "SMA"), /*#__PURE__*/React.createElement("option", null, "D3"), /*#__PURE__*/React.createElement("option", null, "S1"))), /*#__PURE__*/React.createElement("div", {
-      style: css('grid-column:1/-1;')
-    }, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "Estimasi Penghasilan Bulanan (Rp)"), /*#__PURE__*/React.createElement("input", {
-      type: "number",
-      "data-field": "penghasilan",
-      value: V.form.penghasilan,
-      onChange: V.onFormChange,
-      style: css(inp)
-    })))), /*#__PURE__*/React.createElement("div", {
-      style: css(card)
-    }, /*#__PURE__*/React.createElement("span", {
-      style: css('font-size:13.5px; font-weight:700; color:#18191f; display:block; margin-bottom:18px; padding-bottom:12px; border-bottom:1px solid #f0f0ee;')
-    }, "2 · Kondisi Rumah"), /*#__PURE__*/React.createElement("div", {
-      style: css('display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px;')
-    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "Status Kepemilikan"), /*#__PURE__*/React.createElement("select", {
-      "data-field": "statusRumah",
-      value: V.form.statusRumah,
-      onChange: V.onFormChange,
-      style: css(inpSel)
-    }, /*#__PURE__*/React.createElement("option", null, "Milik Sendiri"), /*#__PURE__*/React.createElement("option", null, "Sewa/Kontrak"), /*#__PURE__*/React.createElement("option", null, "Numpang"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "Lantai"), /*#__PURE__*/React.createElement("select", {
-      "data-field": "lantai",
-      value: V.form.lantai,
-      onChange: V.onFormChange,
-      style: css(inpSel)
-    }, /*#__PURE__*/React.createElement("option", null, "Tanah"), /*#__PURE__*/React.createElement("option", null, "Semen"), /*#__PURE__*/React.createElement("option", null, "Keramik/Ubin"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "Dinding"), /*#__PURE__*/React.createElement("select", {
-      "data-field": "dinding",
-      value: V.form.dinding,
-      onChange: V.onFormChange,
-      style: css(inpSel)
-    }, /*#__PURE__*/React.createElement("option", null, "Bambu/Kayu"), /*#__PURE__*/React.createElement("option", null, "Setengah Tembok"), /*#__PURE__*/React.createElement("option", null, "Tembok"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "Atap"), /*#__PURE__*/React.createElement("select", {
-      "data-field": "atap",
-      value: V.form.atap,
-      onChange: V.onFormChange,
-      style: css(inpSel)
-    }, /*#__PURE__*/React.createElement("option", null, "Daun/Rumbia"), /*#__PURE__*/React.createElement("option", null, "Seng/Asbes"), /*#__PURE__*/React.createElement("option", null, "Genteng/Beton"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "Sumber Air Minum"), /*#__PURE__*/React.createElement("select", {
-      "data-field": "sumberAir",
-      value: V.form.sumberAir,
-      onChange: V.onFormChange,
-      style: css(inpSel)
-    }, /*#__PURE__*/React.createElement("option", null, "Sungai/Hujan"), /*#__PURE__*/React.createElement("option", null, "Sumur"), /*#__PURE__*/React.createElement("option", null, "PDAM/Ledeng"))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "Penerangan"), /*#__PURE__*/React.createElement("select", {
-      "data-field": "penerangan",
-      value: V.form.penerangan,
-      onChange: V.onFormChange,
-      style: css(inpSel)
-    }, /*#__PURE__*/React.createElement("option", null, "Non-PLN"), /*#__PURE__*/React.createElement("option", null, "PLN 450 VA"), /*#__PURE__*/React.createElement("option", null, "PLN 900+ VA"))))), /*#__PURE__*/React.createElement("div", {
-      style: css(card)
-    }, /*#__PURE__*/React.createElement("span", {
-      style: css('font-size:13.5px; font-weight:700; color:#18191f; display:block; margin-bottom:18px; padding-bottom:12px; border-bottom:1px solid #f0f0ee;')
-    }, "3 · Kepemilikan Aset"), /*#__PURE__*/React.createElement("div", {
-      style: css('display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:9px;')
-    }, V.asetList.map((a, i) => /*#__PURE__*/React.createElement("label", {
-      key: i,
-      style: css(a.labelStyle)
-    }, /*#__PURE__*/React.createElement("input", {
-      type: "checkbox",
-      checked: a.checked,
-      onChange: a.onToggle,
-      style: css('width:14px;height:14px;accent-color:#1e50d0;cursor:pointer;flex:none;')
-    }), a.name)))), /*#__PURE__*/React.createElement("div", {
-      style: css(card)
-    }, /*#__PURE__*/React.createElement("span", {
-      style: css('font-size:13.5px; font-weight:700; color:#18191f; display:block; margin-bottom:5px;')
-    }, "4 · Foto Rumah"), /*#__PURE__*/React.createElement("span", {
-      style: css('font-size:12px; color:#9ba2b6; display:block; margin-bottom:18px; padding-bottom:12px; border-bottom:1px solid #f0f0ee;')
-    }, "3 foto wajib · dikompres otomatis di perangkat (≤1024px, target <200KB)"), /*#__PURE__*/React.createElement("div", {
-      style: css('display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:14px;')
-    }, V.fotoSlots.map((s, i) => /*#__PURE__*/React.createElement("div", {
-      key: s.key,
-      style: css('display:flex; flex-direction:column; gap:8px;')
-    }, /*#__PURE__*/React.createElement("span", {
-      style: css('font-size:12px; font-weight:600; color:#52576b;')
-    }, s.label), s.hasFoto && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-      style: css('height:148px; border-radius:10px; overflow:hidden; background:#0c1422;')
-    }, /*#__PURE__*/React.createElement("img", {
-      src: s.src,
-      style: css('width:100%;height:100%;object-fit:cover;display:block;')
-    })), /*#__PURE__*/React.createElement("div", {
-      style: css('display:flex; justify-content:space-between; align-items:center; margin-top:6px;')
-    }, /*#__PURE__*/React.createElement("span", {
-      style: css('font-size:10.5px; color:#52576b; font-family:Menlo,monospace;')
-    }, s.beforeStr, " → ", s.afterStr), /*#__PURE__*/React.createElement("button", {
-      onClick: s.onHapus,
-      style: css('font-size:11.5px; color:#dc2626; background:none; border:none; cursor:pointer; font-weight:700; font-family:inherit; padding:0;')
-    }, "Hapus")), /*#__PURE__*/React.createElement("span", {
-      style: css('font-size:11px; color:#16a34a; font-weight:700; display:block; margin-top:3px;')
-    }, "Hemat ", s.ratio)), s.kosong && /*#__PURE__*/React.createElement("label", {
-      style: css('display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;height:148px;border:1.5px dashed #d4d4d0;border-radius:10px;background:repeating-linear-gradient(45deg,#f7f7f5,#f7f7f5 8px,#fafaf9 8px,#fafaf9 16px);cursor:pointer;text-align:center;padding:12px;')
-    }, /*#__PURE__*/React.createElement("span", {
-      style: css('font-size:13px; font-weight:700; color:#52576b;')
-    }, "Unggah Foto"), /*#__PURE__*/React.createElement("span", {
-      style: css('font-size:10.5px; color:#9ba2b6; font-family:Menlo,monospace;')
-    }, "auto-kompres <200 KB"), /*#__PURE__*/React.createElement("input", {
-      type: "file",
-      accept: "image/*",
-      onChange: s.onUpload,
-      style: css('display:none;')
-    })))))), /*#__PURE__*/React.createElement("div", {
-      style: css(card)
-    }, /*#__PURE__*/React.createElement("span", {
-      style: css('font-size:13.5px; font-weight:700; color:#18191f; display:block; margin-bottom:18px; padding-bottom:12px; border-bottom:1px solid #f0f0ee;')
-    }, "5 · Desil Ekonomi & Status Bansos"), /*#__PURE__*/React.createElement("div", {
-      style: css('display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:20px; align-items:start;')
-    }, /*#__PURE__*/React.createElement("div", {
-      style: css('display:flex; flex-direction:column; gap:12px;')
-    }, /*#__PURE__*/React.createElement("div", {
-      style: css('display:flex; align-items:center; gap:12px;')
-    }, /*#__PURE__*/React.createElement("span", {
-      style: css(V.formDesilStyle)
-    }, V.formDesilLabel), /*#__PURE__*/React.createElement("span", {
-      style: css('font-size:12px; color:#9ba2b6; font-style:italic;')
-    }, V.formDesilHint)), /*#__PURE__*/React.createElement("label", {
-      style: css('display:flex; align-items:center; gap:9px; font-size:13px; color:#3d4152; cursor:pointer;')
-    }, /*#__PURE__*/React.createElement("input", {
-      type: "checkbox",
-      "data-field": "desilManual",
-      checked: V.form.desilManual,
-      onChange: V.onFormChange,
-      style: css('width:15px;height:15px;accent-color:#1e50d0;cursor:pointer;')
-    }), "Override desil manual"), V.form.desilManual && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "Desil Manual"), /*#__PURE__*/React.createElement("select", {
-      "data-field": "desil",
-      value: V.form.desil,
-      onChange: V.onFormChange,
-      style: css('width:180px;padding:10px 12px;border:1.5px solid #e0e0de;border-radius:9px;font-family:inherit;font-size:14px;color:#18191f;background:#fafaf9;cursor:pointer;')
-    }, /*#__PURE__*/React.createElement("option", {
-      value: "1"
-    }, "Desil 1"), /*#__PURE__*/React.createElement("option", {
-      value: "2"
-    }, "Desil 2"), /*#__PURE__*/React.createElement("option", {
-      value: "3"
-    }, "Desil 3"), /*#__PURE__*/React.createElement("option", {
-      value: "4"
-    }, "Desil 4"), /*#__PURE__*/React.createElement("option", {
-      value: "5"
-    }, "Desil 5"), /*#__PURE__*/React.createElement("option", {
-      value: "6"
-    }, "Desil 6"), /*#__PURE__*/React.createElement("option", {
-      value: "7"
-    }, "Desil 7"), /*#__PURE__*/React.createElement("option", {
-      value: "8"
-    }, "Desil 8"), /*#__PURE__*/React.createElement("option", {
-      value: "9"
-    }, "Desil 9"), /*#__PURE__*/React.createElement("option", {
-      value: "10"
-    }, "Desil 10")))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
-      style: css(lab)
-    }, "Status Penerima Bansos"), /*#__PURE__*/React.createElement("select", {
-      "data-field": "bansos",
-      value: V.form.bansos,
-      onChange: V.onFormChange,
-      style: css(inpSel)
-    }, /*#__PURE__*/React.createElement("option", null, "Tidak Ada"), /*#__PURE__*/React.createElement("option", null, "PKH"), /*#__PURE__*/React.createElement("option", null, "BPNT"), /*#__PURE__*/React.createElement("option", null, "PKH + BPNT")))))), /*#__PURE__*/React.createElement("div", {
-      style: css('display:flex; justify-content:flex-end; gap:10px; margin-top:18px; padding-top:16px;')
-    }, /*#__PURE__*/React.createElement("button", {
-      onClick: V.onBatal,
-      style: css('padding:11px 20px; font-family:inherit; font-size:13.5px; font-weight:600; border:1.5px solid #e0e0de; background:#fff; color:#3d4152; border-radius:9px; cursor:pointer;')
-    }, "Batal"), /*#__PURE__*/React.createElement("button", {
-      onClick: V.onSimpan,
-      style: css('padding:11px 24px; font-family:inherit; font-size:13.5px; font-weight:700; border:none; background:#1e50d0; color:#fff; border-radius:9px; cursor:pointer;')
-    }, "Simpan & Buat Snapshot"))), V.isRiwayat && V.riwayatWarga && /*#__PURE__*/React.createElement("div", {
+    }, "Menampilkan ", V.jumlahTampil, " dari ", V.jumlahTotal, " rumah tangga")), V.isForm && V.form && this.renderForm(V), V.isRiwayat && V.riwayatWarga && /*#__PURE__*/React.createElement("div", {
       style: css('display:flex; flex-direction:column; gap:14px; animation:fadein 0.2s ease;')
     }, /*#__PURE__*/React.createElement("button", {
       onClick: V.onKembali,

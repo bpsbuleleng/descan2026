@@ -103,3 +103,101 @@ test('CRUD handlers are no-ops for a read-only Kepala SLS', () => {
   assert.equal(sls.state.view, before, 'onTambah must not open the form for SLS');
   assert.equal(sls.state.form, null);
 });
+
+// ---- FASIH questionnaire: structured data, validation & submit gate ----------
+
+test('seed warga carry the FASIH structured blocks (rumah, meteran, aset, anggota)', () => {
+  const c = makeInstance();
+  c.seedWarga().forEach((w) => {
+    assert.ok(w.rumah && typeof w.rumah === 'object', 'rumah block for ' + w.nama);
+    assert.ok(Array.isArray(w.meteran), 'meteran roster for ' + w.nama);
+    assert.ok(w.aset && typeof w.aset.sepedaMotor !== 'undefined', 'aset object for ' + w.nama);
+    assert.ok(Array.isArray(w.anggota) && w.anggota.length >= 1, 'anggota roster for ' + w.nama);
+    const a = w.anggota[0];
+    assert.equal(typeof a.disabilitas.fisik, 'string'); // R38 a–f
+    assert.equal(typeof a.kesehatan.hipertensi, 'string'); // R39 a–r
+    assert.equal(w.anggota.filter((x) => /^1\. Kepala Keluarga/.test(x.hubungan)).length, 1, 'exactly one KRT');
+    assert.ok(w.status === 'final' || w.status === 'draft');
+  });
+});
+
+test('deriveSummary maps structured data back to the flat dashboard summary', () => {
+  const c = makeInstance();
+  const disab = c.seedWarga().find((w) => w.id === 'w03'); // disabilitas case
+  const s = c.deriveSummary(c.dataToForm(disab));
+  assert.equal(s.disabilitas, 'Ada');
+  assert.equal(s.jumlahAnggota, disab.anggota.length);
+  assert.ok(s.desil >= 1 && s.desil <= 10);
+});
+
+test('every seeded (final) household passes validation (galat = 0)', () => {
+  const c = makeInstance();
+  c.seedWarga().forEach((w) => {
+    const v = c.validateKeluarga(c.dataToForm(w));
+    assert.equal(v.galat.length, 0, w.nama + ' galat: ' + JSON.stringify(v.galat.slice(0, 3)));
+  });
+});
+
+test('a blank new household is full of galat and cannot be finalized', () => {
+  const c = makeInstance({ auth: { role: 'Operator' } });
+  const f = c.blankForm();
+  assert.ok(c.validateKeluarga(f).galat.length > 10);
+  assert.equal(c.canFinalize(f), false);
+});
+
+test('validateKeluarga enforces FASIH-specific rules', () => {
+  const c = makeInstance();
+  const base = c.dataToForm(c.seedWarga().find((w) => w.id === 'w12'));
+  const flags = (k, re) => c.validateKeluarga(k).galat.some((g) => re.test(g.label));
+  const clone = () => JSON.parse(JSON.stringify(base));
+
+  let k = clone(); k.nik = '123';
+  assert.ok(flags(k, /NIK Kepala Keluarga harus 16 digit/), 'NIK 16-digit rule');
+
+  k = clone(); if (!k.meteran.length) k.meteran = [{ daya: '1. 450 watt', jenisId: 'ID Pelanggan', idPelanggan: '' }]; k.meteran[0].jenisId = 'ID Pelanggan'; k.meteran[0].idPelanggan = '123';
+  assert.ok(flags(k, /ID Pelanggan harus 12 digit/), 'meteran 12-digit rule');
+
+  k = clone(); k.anggota.forEach((a) => { a.hubungan = '3. Anak'; });
+  assert.ok(flags(k, /tepat satu Kepala Keluarga/), 'exactly one KRT rule');
+
+  k = clone();
+  k.anggota[0].hubungan = '1. Kepala Keluarga'; k.anggota[0].jk = '1. Laki-laki';
+  k.anggota[1].hubungan = '2. Istri/Suami'; k.anggota[1].jk = '1. Laki-laki';
+  assert.ok(flags(k, /Jenis kelamin Kepala Keluarga & pasangan harus berbeda/), 'couple sex rule');
+});
+
+test('skip-logic: bukti kepemilikan is skipped unless "Milik sendiri"', () => {
+  const c = makeInstance();
+  const k = c.dataToForm(c.seedWarga().find((w) => w.id === 'w12'));
+  k.rumah.statusKepemilikan = '2. Kontrak/sewa'; k.rumah.buktiMilik = '';
+  assert.ok(!c.validateKeluarga(k).galat.some((g) => /bukti kepemilikan/i.test(g.label)));
+});
+
+test('finalize is gated on galat=0; draft always saves (status=draft)', () => {
+  const c = makeInstance({ auth: { role: 'Operator', nama: 'Op', wilayah: null } });
+  c.state.form = c.blankForm(); c.state.form.nama = 'Uji Draf'; c.state.view = 'form';
+  const before = c.state.warga.length;
+  c.simpanKeluarga('final'); // blocked — blank form is full of galat
+  assert.equal(c.state.view, 'form', 'finalize stays on form');
+  assert.equal(c.state.warga.length, before, 'no household added on blocked finalize');
+  assert.match(c.state.toast.msg, /GALAT/);
+  c.simpanKeluarga('draft'); // always allowed
+  assert.equal(c.state.warga.length, before + 1, 'draft adds the household');
+  assert.equal(c.state.warga.find((w) => w.nama === 'Uji Draf').status, 'draft');
+});
+
+test('roster handlers add/remove members and resize the meteran roster', () => {
+  const c = makeInstance({ auth: { role: 'Operator' } });
+  c.state.form = c.blankForm();
+  assert.equal(c.state.form.anggota.length, 1);
+  c.tambahAnggota();
+  assert.equal(c.state.form.anggota.length, 2);
+  assert.equal(c.state.form.anggota[1].no, 2);
+  c.hapusAnggota(0);
+  assert.equal(c.state.form.anggota.length, 1);
+  assert.equal(c.state.form.anggota[0].no, 1); // renumbered
+  c.setJumlahMeteran(2);
+  assert.equal(c.state.form.meteran.length, 2);
+  c.setJumlahMeteran(0);
+  assert.equal(c.state.form.meteran.length, 0);
+});

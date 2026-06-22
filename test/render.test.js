@@ -45,3 +45,27 @@ test('Kepala SLS dashboard totals are scoped', () => {
   assert.match(txt, /Total KK/);
   assert.doesNotMatch(txt, /"val":18/); // not all 18
 });
+
+test('Operator form view renders the 5 FASIH blocks, both rosters, and the validation summary', () => {
+  const c = makeInstance({ auth: { role: 'Operator', nama: 'Op', wilayah: null } });
+  c.state.form = c.blankForm();
+  c.state.view = 'form';
+  const txt = treeText(c.render());
+  assert.match(txt, /Keterangan Identitas Keluarga/);   // Blok I
+  assert.match(txt, /Keterangan Perumahan/);            // Blok II
+  assert.match(txt, /Kepemilikan Aset/);                // Blok III
+  assert.match(txt, /Keterangan Anggota Keluarga/);     // Blok IV
+  assert.match(txt, /Roster Meteran/);                  // R18 roster
+  assert.match(txt, /\+ Tambah Anggota/);               // anggota roster control
+  assert.match(txt, /Submit \/ Finalisasi/);
+  // a blank form is full of galat → the finalize button is disabled (gate)
+  assert.match(txt, /"disabled":true/);
+});
+
+test('a finalizable household enables the Submit/Finalisasi button', () => {
+  const c = makeInstance({ auth: { role: 'Operator', nama: 'Op', wilayah: null } });
+  c.state.form = c.dataToForm(c.seedWarga().find((w) => w.id === 'w12'));
+  c.state.view = 'form';
+  const txt = treeText(c.render());
+  assert.doesNotMatch(txt, /"disabled":true/); // galat=0 → submit enabled
+});

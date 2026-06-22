@@ -60,6 +60,23 @@ Apps Script Web App  ──►  Google Spreadsheet (database)
 
 Respons selalu `{ ok: true, ... }` atau `{ ok: false, error }`.
 
+## Kuesioner FASIH, roster & draf
+
+Sejak form mengikuti kuesioner FASIH (Blok I–V + roster anggota & roster meteran),
+seluruh isian per-KK disimpan sebagai JSON di kolom `dataJson` — termasuk
+`rumah`, `meteran[]`, `aset`, dan `anggota[]` (per anggota: identitas, disabilitas
+a–f, keluhan kesehatan a–r, dll). Tidak perlu kolom baru per field.
+
+- Kolom **`status`** (`draft`/`final`) ditambahkan ke sheet `Warga`. **Simpan Draf**
+  dari aplikasi menulis baris ber-`status=draft` **langsung ke spreadsheet**;
+  **Finalisasi** menulis `status=final` (hanya bila tidak ada GALAT).
+- Foto (base64) **tidak** disimpan ke sheet — di-strip dari `snapshots[].foto`
+  dan `rumah.foto` (R21) sebelum ditulis. Untuk foto terpusat: Google Drive (lanjutan).
+- Sheet `Warga` yang **sudah ter-deploy** otomatis ditambahi header kolom `status`
+  pada permintaan berikutnya (`ensureWargaHeader()`); baris lama tetap terbaca
+  (status diambil dari `dataJson`). Tetap lakukan **redeploy versi baru** setelah
+  mengganti `Code.gs`, lalu **reset** bila ingin data contoh terstruktur yang baru.
+
 ## Keamanan (catatan prototipe)
 
 Kata sandi tersimpan apa adanya di sheet `Users` dan dikirim tiap permintaan —

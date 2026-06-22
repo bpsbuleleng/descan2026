@@ -95,3 +95,21 @@ test('server mode: push(saveWarga) persists to the server with credentials', asy
   assert.equal(last.action, 'saveWarga');
   assert.equal(last.auth.username, 'operator'); // credentials attached
 });
+
+test('server mode: saving a draft writes straight to the spreadsheet with status=draft', async () => {
+  const srv = makeServer();
+  const c = serverInstance(srv);
+  c.state.loginForm = { username: 'operator', password: 'operator123', error: '' };
+  c.login();
+  await flush();
+  c.state.form = c.blankForm();
+  c.state.form.nama = 'KK Draf Server';
+  c.state.view = 'form';
+  c.simpanKeluarga('draft'); // draft is allowed even with galat, and pushes to server
+  await flush();
+  const last = srv.calls[srv.calls.length - 1];
+  assert.equal(last.action, 'saveWarga');
+  assert.equal(last.payload.warga.status, 'draft');
+  assert.equal(last.payload.warga.nama, 'KK Draf Server');
+  assert.ok(srv.warga.some((w) => w.nama === 'KK Draf Server'), 'draft persisted to the (fake) spreadsheet');
+});

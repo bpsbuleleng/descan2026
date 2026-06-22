@@ -35,9 +35,10 @@ function makeLocalStorage() {
 function makeReact() {
   class ReactComponent {
     constructor(props) { this.props = props || {}; }
-    setState(updater) {
+    setState(updater, cb) {
       const partial = (typeof updater === 'function') ? updater(this.state) : updater;
       this.state = Object.assign({}, this.state, partial);
+      if (typeof cb === 'function') cb();
     }
   }
   const Fragment = { __fragment: true };
