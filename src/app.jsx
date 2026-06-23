@@ -202,9 +202,10 @@ Object.assign(Component.prototype, {
     } else {
       const num=o.type==='number', rup=o.type==='rupiah';
       const setv=v=>this.setForm(o.p, String(v).replace(/[^0-9]/g,''));
+      const fmtDisp=v=>(num||rup)&&v!=null&&v!==''?Number(v).toLocaleString('id-ID'):v==null?'':String(v);
       control=(<div style={css('display:flex;align-items:stretch;')}>
         {rup&&<span style={css('display:flex;align-items:center;padding:0 11px;border:1.5px solid #e0e0de;border-right:none;border-radius:8px 0 0 8px;background:#f7f7f5;color:#6b7280;font-size:13px;font-weight:600;')}>Rp</span>}
-        <input value={o.value==null?'':o.value} inputMode={(num||rup)?'numeric':undefined} onChange={e=>this.setForm(o.p, (num||rup)?e.target.value.replace(/[^0-9]/g,''):e.target.value)} style={css(inp+'min-width:0;'+(rup?'border-radius:0;':num?'border-radius:8px 0 0 8px;':''))} />
+        <input value={fmtDisp(o.value)} inputMode={(num||rup)?'numeric':undefined} onChange={e=>this.setForm(o.p, (num||rup)?e.target.value.replace(/[^0-9]/g,''):e.target.value)} style={css(inp+'min-width:0;'+(rup?'border-radius:0;':num?'border-radius:8px 0 0 8px;':''))} />
         {num&&<div style={css('display:flex;flex-direction:column;border:1.5px solid #e0e0de;border-left:none;border-radius:0 8px 8px 0;overflow:hidden;flex:none;')}>
           <button onClick={()=>setv(Number(o.value||0)+1)} style={css('border:none;border-bottom:1px solid #e0e0de;background:#f7f7f5;cursor:pointer;padding:0 10px;font-size:9px;color:#52576b;flex:1;')}>▲</button>
           <button onClick={()=>setv(Math.max(0,Number(o.value||0)-1))} style={css('border:none;background:#f7f7f5;cursor:pointer;padding:0 10px;font-size:9px;color:#52576b;flex:1;')}>▼</button>
@@ -333,6 +334,17 @@ Object.assign(Component.prototype, {
             <div style={css('font-size:11px;color:#9ba2b6;margin-bottom:4px;')}>R24. Nomor Urut Anggota: <strong style={css('color:#52576b;')}>{a.no||i+1}</strong></div>
             {i===0&&<div style={css('font-size:11.5px;color:#1e50d0;background:#eef2fc;border:1px solid #c7d7f6;border-radius:8px;padding:8px 12px;margin-bottom:4px;')}>ℹ Nama dan NIK disinkronkan otomatis dari Blok I. Edit di Blok I untuk mengubahnya.</div>}
             {ANGGOTA_FIELDS.filter(d=>!d.when||d.when(k,a)).map(d=>{
+              if(d.rp==='_tglLahir'){
+                return (<div key="_tglLahir" style={css('display:'+(mob?'flex':'grid')+';'+(mob?'flex-direction:column;gap:8px;':'grid-template-columns:minmax(150px,38%) 1fr;gap:18px;')+'align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;')}>
+                  <div style={css('font-size:13px;font-weight:600;color:#2c3442;'+(mob?'':'padding-top:7px;'))}><span style={css('color:#b0b5c2;font-weight:700;margin-right:6px;')}>30.</span>Tanggal Lahir<span style={css('color:'+ORANGE+';')}> *</span></div>
+                  <div style={css('display:grid;grid-template-columns:'+(mob?'1fr 1fr':'1fr 1.4fr 1fr 1fr')+';gap:8px;')}>
+                    <input value={a.tglLahir||''} onChange={e=>this.setForm(base+'tglLahir',e.target.value.replace(/[^0-9]/g,''))} placeholder="Tgl" style={css(inp)} />
+                    <select value={a.blnLahir||''} onChange={e=>this.setForm(base+'blnLahir',e.target.value)} style={css(inp+'cursor:pointer;')}><option value="">Bulan</option>{KODE.bulan.map((b,j)=>(<option key={j} value={b}>{b}</option>))}</select>
+                    <input value={a.thnLahir||''} onChange={e=>this.setForm(base+'thnLahir',e.target.value.replace(/[^0-9]/g,''))} placeholder="Thn" style={css(inp)} />
+                    <input value={a.umur||''} onChange={e=>this.setForm(base+'umur',e.target.value.replace(/[^0-9]/g,''))} placeholder="Umur" style={css(inp)} />
+                  </div>
+                </div>);
+              }
               if(i===0&&(d.rp==='nama'||d.rp==='nik')){
                 const err=errMap[base+d.rp];
                 return (<div key={d.rp} style={css('display:'+(mob?'flex':'grid')+';'+(mob?'flex-direction:column;gap:8px;':'grid-template-columns:minmax(150px,38%) 1fr;gap:18px;')+'align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;')}>
@@ -348,15 +360,6 @@ Object.assign(Component.prototype, {
               }
               return this.field({p:base+d.rp,r:d.r,label:d.label,type:d.type,opts:d.opts,req:d.req,value:a[d.rp],error:errMap[base+d.rp]});
             })}
-            <div style={css('display:'+(mob?'flex':'grid')+';'+(mob?'flex-direction:column;gap:8px;':'grid-template-columns:minmax(150px,38%) 1fr;gap:18px;')+'align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;')}>
-              <div style={css('font-size:13px;font-weight:600;color:#2c3442;'+(mob?'':'padding-top:7px;'))}><span style={css('color:#b0b5c2;font-weight:700;margin-right:6px;')}>30.</span>Tanggal Lahir<span style={css('color:'+ORANGE+';')}> *</span></div>
-              <div style={css('display:grid;grid-template-columns:'+(mob?'1fr 1fr':'1fr 1.4fr 1fr 1fr')+';gap:8px;')}>
-                <input value={a.tglLahir||''} onChange={e=>this.setForm(base+'tglLahir',e.target.value.replace(/[^0-9]/g,''))} placeholder="Tgl" style={css(inp)} />
-                <select value={a.blnLahir||''} onChange={e=>this.setForm(base+'blnLahir',e.target.value)} style={css(inp+'cursor:pointer;')}><option value="">Bulan</option>{KODE.bulan.map((b,j)=>(<option key={j} value={b}>{b}</option>))}</select>
-                <input value={a.thnLahir||''} onChange={e=>this.setForm(base+'thnLahir',e.target.value.replace(/[^0-9]/g,''))} placeholder="Thn" style={css(inp)} />
-                <input value={a.umur||''} onChange={e=>this.setForm(base+'umur',e.target.value.replace(/[^0-9]/g,''))} placeholder="Umur" style={css(inp)} />
-              </div>
-            </div>
             <div style={css('background:#fafaf9;border:1px solid #ececea;border-radius:10px;padding:12px 14px;margin-top:6px;')}>
               <div style={css('font-size:12px;font-weight:800;color:'+ORANGE+';margin-bottom:6px;')}>38. Disabilitas (jangka waktu lama)</div>
               {DISABILITAS_ITEMS.map(it=>this.yt(base+'disabilitas.'+it[0],it[1],getPath(a,'disabilitas.'+it[0])))}
@@ -555,6 +558,81 @@ Object.assign(Component.prototype, {
     );
   },
 
+  renderKuesioner(rw){
+    if(!rw) return null;
+    const r=rw.rumah||{}, ast=rw.aset||{}, wil=rw.wilayah||{}, geo=rw.geotag||{};
+    const fmt=v=>(v==null||v==='')?'—':String(v);
+    const fmtRp=v=>v?'Rp'+Number(v).toLocaleString('id-ID'):'—';
+    const fmtNum=v=>(v!=null&&v!=='')?Number(v).toLocaleString('id-ID'):'—';
+    const fmtField=(d,val)=>{ if(d.type==='rupiah') return fmtRp(val); if(d.type==='number') return fmtNum(val); return fmt(val); };
+    const cell=(l,v,hi)=>(
+      <div style={css('display:flex;flex-direction:column;gap:2px;padding:8px 11px;border-radius:8px;background:'+(hi?'#fffbf0':'#fafaf9')+';'+(hi?'border:1px solid #edd7a3;':''))}>
+        <span style={css('font-size:10.5px;font-weight:600;color:'+(hi?'#92400e':'#9ba2b6')+';')}>{l}</span>
+        <span style={css('font-size:13px;font-weight:600;color:'+(hi?'#92400e':'#2c3442')+';')}>{v||'—'}</span>
+      </div>);
+    const grid=(items)=>(<div style={css('display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:5px;')}>{items.filter(Boolean).map((it,i)=><React.Fragment key={i}>{cell(it[0],it[1],it[2])}</React.Fragment>)}</div>);
+    const sec=(t)=>(<div style={css('font-size:11px;font-weight:800;color:'+ORANGE+';text-transform:uppercase;letter-spacing:0.06em;margin:14px 0 6px;padding-bottom:5px;border-bottom:1px solid #f0f0ee;')}>{t}</div>);
+
+    const blokI=[
+      ['16. Status Keberadaan', fmt(rw.statusKeluarga)],
+      ['1a. Nama KK', fmt(rw.nama)],['1b. NIK', fmt(rw.nik)],['1c. No. KK', fmt(rw.noKK)],
+      ['Provinsi', fmt(wil.provinsi)],['Kabupaten', fmt(wil.kabupaten)],['Kecamatan', fmt(wil.kecamatan)],['Desa', fmt(wil.desa)],
+      ['Klasifikasi', fmt(wil.klasifikasi)],['Kode SLS', fmt(wil.kodeSls)],['Nama SLS', fmt(wil.namaSls)],['Kode Pos', fmt(wil.kodePos)],
+      ['3j. Nama Jalan', fmt(wil.namaJalan)],['Nomor Rumah', fmt(wil.nomorRumah)],
+      ['4. Alamat sesuai KK', fmt(rw.alamatSesuaiKK)],
+      ['3l. Geotagging', geo.lat&&geo.long?geo.lat+', '+geo.long:'—'],
+    ];
+    const blokII=BLOK2.filter(d=>!d.when||d.when(rw)).map(d=>[d.r+'. '+d.label, fmtField(d,getPath(rw,d.p))]);
+    const blokIIB=BLOK2B.map(d=>[d.r+'. '+d.label, fmtField(d,getPath(rw,d.p))]);
+    const blokIII=[...ASET22.map(a=>['22. '+a[1]+' ('+a[2]+')', fmtNum(ast[a[0]])]),
+      ...(Number(ast.sepedaMotor)>0?[['22g. Nilai sepeda motor', fmtRp(ast.nilaiSepedaMotor)]]:[] ),
+      ...(Number(ast.mobil)>0?[['22h. Nilai mobil', fmtRp(ast.nilaiMobil)]]:[] ),
+      ...ASET23.map(a=>['23. '+a[1], fmtNum(ast[a[0]])])];
+
+    return (
+      <div style={css('background:#fff;border-radius:14px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);display:flex;flex-direction:column;')}>
+        <div style={css('font-size:14px;font-weight:700;color:#18191f;letter-spacing:-0.01em;margin-bottom:2px;')}>Data Kuesioner Lengkap</div>
+        <div style={css('font-size:11.5px;color:#9ba2b6;margin-bottom:4px;')}>kondisi data saat ini</div>
+
+        {sec('Blok I — Identitas Keluarga')}
+        {grid(blokI)}
+
+        {sec('Blok II — Perumahan')}
+        {grid(blokII)}
+        {(rw.meteran||[]).map((m,i)=>(
+          <React.Fragment key={i}>
+            <div style={css('font-size:11px;font-weight:700;color:#52576b;margin:8px 0 4px;')}>↳ Meteran ke-{i+1}</div>
+            {grid([['18b. Daya Terpasang', fmt(m.daya)],[m.jenisId||'ID Pelanggan', fmt(m.idPelanggan)]])}
+          </React.Fragment>))}
+        {grid(blokIIB)}
+
+        {sec('Blok III — Kepemilikan Aset')}
+        {grid(blokIII)}
+
+        {sec('Blok IV — Anggota Keluarga')}
+        {(rw.anggota||[]).map((a,i)=>{
+          const tglLahir=[a.tglLahir,a.blnLahir,a.thnLahir].filter(Boolean).join(' ')+(a.umur?' ('+a.umur+' thn)':'');
+          const af=ANGGOTA_FIELDS.filter(d=>d.rp!=='_tglLahir'&&(!d.when||d.when(rw,a))).map(d=>[d.r+'. '+d.label,fmtField(d,a[d.rp])]);
+          const disAda=DISABILITAS_ITEMS.filter(it=>/^1\. Ya/.test(a.disabilitas&&a.disabilitas[it[0]]||''));
+          const kesAda=KESEHATAN_ITEMS.filter(it=>/^1\. Ya/.test(a.kesehatan&&a.kesehatan[it[0]]||''));
+          return (<div key={i} style={css('background:#fafaf9;border:1px solid #ececea;border-radius:10px;padding:13px;margin-top:8px;')}>
+            <div style={css('font-size:13px;font-weight:700;color:#18191f;margin-bottom:8px;')}>
+              {i+1}. {a.nama||'—'} <span style={css('font-size:11.5px;font-weight:500;color:#9ba2b6;')}>· {a.hubungan||'—'} · {a.jk||'—'}</span>
+            </div>
+            {grid([[' 30. Tanggal Lahir', tglLahir||'—'], ...af])}
+            {(disAda.length>0||kesAda.length>0)&&(<div style={css('display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;')}>
+              {disAda.map(it=>(<span key={it[0]} style={css('font-size:11px;padding:2px 8px;border-radius:6px;font-weight:700;color:#b91c1c;background:#fef2f2;border:1px solid #f3c9c9;')}>⚠ {it[1]}</span>))}
+              {kesAda.map(it=>(<span key={it[0]} style={css('font-size:11px;padding:2px 8px;border-radius:6px;font-weight:700;color:#92400e;background:#fffbeb;border:1px solid #fde68a;')}>{it[1]}</span>))}
+            </div>)}
+          </div>);
+        })}
+
+        {sec('Blok V — Catatan')}
+        <div style={css('font-size:13px;color:#3d4152;padding:10px 12px;background:#fafaf9;border-radius:8px;line-height:1.6;')}>{rw.catatan||<span style={css('color:#9ba2b6;font-style:italic;')}>Tidak ada catatan</span>}</div>
+      </div>
+    );
+  },
+
   render(){
     if(!this.state.auth){ return this.renderLogin(); }
     const V=this.renderVals();
@@ -714,6 +792,7 @@ Object.assign(Component.prototype, {
                         <Th col="dusun" label="Banjar" />
                         <Th col="desil" label="Desil" />
                         <Th col="bansos" label="Bansos" />
+                        <th style={css('padding:12px 16px; font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.06em; text-align:center;')}>Snp</th>
                         <th style={css('padding:12px 16px; font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.06em;')}></th>
                       </tr>
                     </thead>
@@ -729,6 +808,9 @@ Object.assign(Component.prototype, {
                           </td>
                           <td style={css('padding:12px 16px; vertical-align:middle;')}><span style={css(w.desilBadgeStyle)}>{w.desilLabel}</span></td>
                           <td style={css('padding:12px 16px; vertical-align:middle;')}><span style={css(w.bansosBadgeStyle)}>{w.bansos}</span></td>
+                          <td style={css('padding:12px 16px; vertical-align:middle; text-align:center;')}>
+                            <span style={css('display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:22px;padding:0 7px;border-radius:20px;font-size:11.5px;font-weight:700;background:#eef2fc;color:#1e50d0;')}>{w.snapCount}</span>
+                          </td>
                           <td style={css('padding:12px 16px; vertical-align:middle; text-align:right;')}>
                             <button onClick={w.onLihat} title="Lihat Detail & Riwayat" style={css('padding:6px 13px;border:1.5px solid #e0e0de;background:#fff;color:#3d4152;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;font-family:inherit;white-space:nowrap;')}>Lihat →</button>
                           </td>
@@ -761,11 +843,20 @@ Object.assign(Component.prototype, {
 
           {V.isRiwayat && V.riwayatWarga && (
             <div style={css('display:flex; flex-direction:column; gap:14px; animation:fadein 0.2s ease;')}>
-              <button onClick={V.onKembali} style={css('align-self:flex-start; display:inline-flex; align-items:center; gap:5px; padding:8px 14px; font-family:inherit; font-size:13px; font-weight:600; border:1.5px solid #e0e0de; background:#fff; color:#3d4152; border-radius:8px; cursor:pointer;')}>‹ Kembali ke Daftar</button>
-              <div style={css('background:#fff; border-radius:14px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05); display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px;')}>
+              <div style={css('display:flex; align-items:center; gap:8px; flex-wrap:wrap;')}>
+                <button onClick={V.onKembali} style={css('display:inline-flex; align-items:center; gap:5px; padding:7px 13px; font-family:inherit; font-size:12.5px; font-weight:600; border:1.5px solid #e0e0de; background:#fff; color:#3d4152; border-radius:8px; cursor:pointer;')}>‹ Daftar</button>
+                <div style={css('flex:1;')}></div>
+                {V.canCrud && (
+                  <React.Fragment>
+                    <button onClick={V.riwayatWarga.onEdit} style={css('display:inline-flex;align-items:center;gap:5px; padding:7px 13px; font-family:inherit; font-size:12.5px; font-weight:600; border:1.5px solid #c7d7f6; background:#eef2fc; color:#1e50d0; border-radius:8px; cursor:pointer;')}>✏ Edit</button>
+                    <button onClick={V.riwayatWarga.onHapus} style={css('display:inline-flex;align-items:center;gap:5px; padding:7px 13px; font-family:inherit; font-size:12.5px; font-weight:600; border:1.5px solid #fca5a5; background:#fef2f2; color:#b91c1c; border-radius:8px; cursor:pointer;')}>✕ Hapus</button>
+                  </React.Fragment>
+                )}
+              </div>
+              <div style={css('background:#fff; border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05); display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px;')}>
                 <div>
-                  <div style={css('font-size:20px; font-weight:800; color:#18191f; letter-spacing:-0.02em;')}>{V.riwayatWarga.nama}</div>
-                  <div style={css('display:flex; flex-wrap:wrap; gap:12px; margin-top:6px;')}>
+                  <div style={css('font-size:19px; font-weight:800; color:#18191f; letter-spacing:-0.02em;')}>{V.riwayatWarga.nama}</div>
+                  <div style={css('display:flex; flex-wrap:wrap; gap:10px; margin-top:5px;')}>
                     <span style={css('font-size:12px; color:#9ba2b6; font-variant-numeric:tabular-nums;')}>{V.riwayatWarga.nik}</span>
                     <span style={css('font-size:12px; color:#9ba2b6; font-variant-numeric:tabular-nums;')}>{V.riwayatWarga.noKK}</span>
                     <span style={css('font-size:12px; color:#9ba2b6;')}>{V.riwayatWarga.rtRw}</span>
@@ -774,12 +865,6 @@ Object.assign(Component.prototype, {
                 <div style={css('display:flex; align-items:center; gap:9px; flex-wrap:wrap;')}>
                   <span style={css(V.riwayatWarga.desilStyle)}>{V.riwayatWarga.desilLabel}</span>
                   <span style={css(V.riwayatWarga.bansosStyle)}>{V.riwayatWarga.bansos}</span>
-                  {V.canCrud && (
-                    <React.Fragment>
-                      <button onClick={V.riwayatWarga.onEdit} style={css('padding:9px 16px; font-family:inherit; font-size:13px; font-weight:700; border:none; background:#1e50d0; color:#fff; border-radius:8px; cursor:pointer;')}>Edit Data</button>
-                      <button onClick={V.riwayatWarga.onHapus} style={css('padding:9px 14px; font-family:inherit; font-size:13px; font-weight:700; border:1.5px solid #fca5a5; background:#fef2f2; color:#b91c1c; border-radius:8px; cursor:pointer;')}>Hapus</button>
-                    </React.Fragment>
-                  )}
                 </div>
               </div>
 
@@ -897,6 +982,7 @@ Object.assign(Component.prototype, {
                   </div>
                 </div>
               </div>
+              {this.renderKuesioner(this.state.warga.find(w=>w.id===this.state.selectedId))}
             </div>
           )}
 

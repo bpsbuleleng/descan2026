@@ -44,7 +44,7 @@ Object.assign(Component.prototype, {
     ASET22.forEach(a=>req(getPath(k,'aset.'+a[0]))); ASET23.forEach(a=>req(getPath(k,'aset.'+a[0])));
     if(Number(getPath(k,'aset.sepedaMotor'))>0) req(getPath(k,'aset.nilaiSepedaMotor'));
     if(Number(getPath(k,'aset.mobil'))>0) req(getPath(k,'aset.nilaiMobil'));
-    (k.anggota||[]).forEach(a=>{ ANGGOTA_FIELDS.forEach(d=>{ if(d.when&&!d.when(k,a)) return; req(a[d.rp]); }); req(a.tglLahir); req(a.blnLahir); req(a.thnLahir);
+    (k.anggota||[]).forEach(a=>{ ANGGOTA_FIELDS.forEach(d=>{ if(d.rp==='_tglLahir') return; if(d.when&&!d.when(k,a)) return; req(a[d.rp]); }); req(a.tglLahir); req(a.blnLahir); req(a.thnLahir);
       DISABILITAS_ITEMS.forEach(it=>req(getPath(a,'disabilitas.'+it[0]))); KESEHATAN_ITEMS.forEach(it=>req(getPath(a,'kesehatan.'+it[0]))); });
     return {total:total, filled:filled, pct: total?Math.round(100*filled/total):0};
   },
