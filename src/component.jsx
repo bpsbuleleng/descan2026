@@ -58,9 +58,15 @@ class Component extends React.Component {
 
   // -- Sesi login --------------------------------------------------------------
   static get AUTH_KEY(){ return 'dtsen-desa-auth-v1'; }
+  static get CRED_KEY(){ return 'dtsen-desa-cred-v1'; }
   loadAuth(){
     try{ const raw=window.localStorage.getItem(Component.AUTH_KEY); if(!raw) return null;
       const a=JSON.parse(raw); if(a&&a.role&&a.nama) return a; }catch(e){}
+    return null;
+  }
+  loadCred(){
+    try{ const raw=window.localStorage.getItem(Component.CRED_KEY); if(!raw) return null;
+      const c=JSON.parse(raw); if(c&&c.username&&c.password) return c; }catch(e){}
     return null;
   }
   canCrud(){ const a=this.state.auth; return !!a&&(a.role==='Operator'||a.role==='Kepala Desa'); }
@@ -81,7 +87,8 @@ class Component extends React.Component {
       this.apiCall('login',{username:u,password:f.password}).then(res=>{
         this.setState({loading:false});
         if(!res||!res.ok){ this._cred=null; this.loginFail(res&&res.error); return; }
-        this.loginOk(res.user,false); // sesi server tidak dipersist (butuh login tiap sesi)
+        try{ window.localStorage.setItem(Component.CRED_KEY,JSON.stringify({username:u,password:f.password})); }catch(e){}
+        this.loginOk(res.user,true);
         this.bootstrap();
       }).catch(()=>{ this.setState({loading:false}); this._cred=null; this.loginFail('Server tidak terjangkau. Periksa koneksi / URL.'); });
       return;
@@ -91,7 +98,7 @@ class Component extends React.Component {
     if(!acc){ this.loginFail(); return; }
     this.loginOk({username:acc.username,nama:acc.nama,role:acc.role,wilayah:acc.wilayah},true);
   }
-  logout(){ try{ window.localStorage.removeItem(Component.AUTH_KEY); }catch(e){} this._cred=null;
+  logout(){ try{ window.localStorage.removeItem(Component.AUTH_KEY); }catch(e){} try{ window.localStorage.removeItem(Component.CRED_KEY); }catch(e){} this._cred=null;
     this.setState({auth:null,view:'dashboard',form:null,editId:null,selectedId:null,selectedTanggal:null,showSanggahanForm:false,processingId:null,confirmModal:null,toast:null,loading:false,sortBy:null,sortDir:'asc'}); }
 
   initState(){
@@ -130,6 +137,12 @@ class Component extends React.Component {
     window.addEventListener('resize',this._onResize);
     this._onScroll=()=>this.setState({showScrollTop:window.scrollY>300});
     window.addEventListener('scroll',this._onScroll,{passive:true});
+    // Server mode: restore saved credentials so API calls work after page refresh.
+    if(this.serverMode()&&this.state.auth){
+      const cred=this.loadCred();
+      if(cred){ this._cred=cred; this.bootstrap(); }
+      else { this.setState({auth:null}); }
+    }
   }
   componentWillUnmount(){
     window.removeEventListener('resize',this._onResize);
