@@ -601,6 +601,7 @@ class Component extends React.Component {
       selectedTanggal: null,
       showSanggahanForm: false,
       processingId: null,
+      confirmModal: null,
       toast: null
     });
   }
@@ -635,6 +636,7 @@ class Component extends React.Component {
       },
       processingId: null,
       processCatatan: '',
+      confirmModal: null,
       toast: null,
       today: '2026-06-19'
     };
@@ -2001,7 +2003,8 @@ class Component extends React.Component {
     this.setState({
       form: null,
       editId: null,
-      view: this.state.selectedId ? 'riwayat' : 'daftar'
+      view: this.state.selectedId ? 'riwayat' : 'daftar',
+      confirmModal: null
     });
   }
   // -- Handler form FASIH (nested path) ----------------------------------------
@@ -2034,6 +2037,8 @@ class Component extends React.Component {
   }
   hapusAnggota(i) {
     if (!this.canCrud()) return;
+    const nm = this.state.form.anggota[i] && this.state.form.anggota[i].nama || 'Anggota ' + (i + 1);
+    if (window.confirm && !window.confirm('Hapus "' + nm + '" dari roster anggota? Data yang sudah diisi akan hilang.')) return;
     this.setState(s => {
       let ang = s.form.anggota.slice();
       ang.splice(i, 1);
@@ -2048,6 +2053,8 @@ class Component extends React.Component {
   }
   setJumlahMeteran(n) {
     n = Math.max(0, Math.min(10, Number(n) || 0));
+    const curLen = (this.state.form && this.state.form.meteran || []).length;
+    if (n < curLen && window.confirm && !window.confirm('Mengurangi jumlah meteran akan menghapus ' + (curLen - n) + ' kartu pengisian. Lanjutkan?')) return;
     this.setState(s => {
       const cur = s.form.meteran.slice();
       while (cur.length < n) cur.push({
@@ -2340,6 +2347,43 @@ class Component extends React.Component {
   canFinalize(k) {
     return this.validateKeluarga(k || this.state.form).galat.length === 0;
   }
+  konfirmasiSimpan(type) {
+    if (!this.canCrud()) return;
+    const f = this.state.form;
+    if (!f || !f.nama || !f.nama.trim()) {
+      this.setState({
+        toast: {
+          type: 'err',
+          msg: 'Nama Kepala Keluarga wajib diisi untuk menyimpan.'
+        }
+      });
+      this.autoClear();
+      return;
+    }
+    if (type === 'final') {
+      const v = this.validateKeluarga(f);
+      if (v.galat.length > 0) {
+        this.setState({
+          toast: {
+            type: 'err',
+            msg: 'Belum bisa difinalisasi: masih ada ' + v.galat.length + ' GALAT yang harus diperbaiki.'
+          }
+        });
+        this.autoClear();
+        return;
+      }
+    }
+    this.setState({
+      confirmModal: {
+        type: type
+      }
+    });
+  }
+  batalKonfirmasi() {
+    this.setState({
+      confirmModal: null
+    });
+  }
   bukaRiwayat(id) {
     const w = this.state.warga.find(x => x.id === id);
     const last = w.snapshots[w.snapshots.length - 1].tanggal;
@@ -2467,6 +2511,7 @@ class Component extends React.Component {
         selectedTanggal: today,
         form: null,
         editId: null,
+        confirmModal: null,
         toast: {
           type: 'ok',
           msg: msg
@@ -2984,8 +3029,8 @@ class Component extends React.Component {
       formDesilHint: formDesilHint,
       validasi: validasi,
       canFinalize: canFinalize,
-      onSimpanDraf: () => this.simpanKeluarga('draft'),
-      onFinalisasi: () => this.simpanKeluarga('final'),
+      onSimpanDraf: () => this.konfirmasiSimpan('draft'),
+      onFinalisasi: () => this.konfirmasiSimpan('final'),
       onBatal: () => this.onBatal(),
       riwayatWarga: riwayatWarga,
       snapshotList: snapshotList,
@@ -3012,7 +3057,12 @@ class Component extends React.Component {
       sgKosong: sanggahanListDisplay.length === 0,
       onKembali: () => this.onKembali(),
       toast: st.toast,
-      toastStyle: toastStyle
+      toastStyle: toastStyle,
+      confirmModal: st.confirmModal,
+      onBatalKonfirmasi: () => this.batalKonfirmasi(),
+      onKonfirmasiOk: () => {
+        if (st.confirmModal) this.simpanKeluarga(st.confirmModal.type);
+      }
     };
   }
   renderLogin() {
@@ -3676,7 +3726,56 @@ class Component extends React.Component {
       onClick: V.canFinalize ? V.onFinalisasi : undefined,
       disabled: !V.canFinalize,
       style: css('padding:11px 22px;font-family:inherit;font-size:13.5px;font-weight:700;border:none;border-radius:9px;color:#fff;background:' + (V.canFinalize ? '#16a34a' : '#cbd5e1') + ';cursor:' + (V.canFinalize ? 'pointer' : 'not-allowed') + ';')
-    }, "Submit / Finalisasi")))), k._showRingkasan && /*#__PURE__*/React.createElement("div", {
+    }, "Submit / Finalisasi")))), V.confirmModal && /*#__PURE__*/React.createElement("div", {
+      onClick: () => V.onBatalKonfirmasi(),
+      style: css('position:fixed;inset:0;z-index:90;background:rgba(15,18,28,0.45);display:flex;align-items:center;justify-content:center;padding:20px;animation:fadein 0.15s ease;')
+    }, /*#__PURE__*/React.createElement("div", {
+      onClick: e => e.stopPropagation(),
+      style: css('background:#fff;border-radius:16px;width:100%;max-width:480px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid #f0f0ee;')
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:16px;font-weight:800;color:#18191f;')
+    }, V.confirmModal.type === 'draft' ? 'Konfirmasi Simpan Draf' : 'Konfirmasi Finalisasi'), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:12px;color:#9ba2b6;margin-top:2px;')
+    }, prog.filled, " dari ", prog.total, " field wajib terisi")), /*#__PURE__*/React.createElement("button", {
+      onClick: () => V.onBatalKonfirmasi(),
+      style: css('width:30px;height:30px;border-radius:8px;border:none;background:#f3f3f2;color:#52576b;font-size:16px;cursor:pointer;')
+    }, "×")), /*#__PURE__*/React.createElement("div", {
+      style: css('padding:18px 20px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;gap:10px;')
+    }, chip('Galat', val.galat.length, '#dc2626', '#fef2f2'), chip('Peringatan', val.peringatan.length, '#d97706', '#fffbeb'), chip('Kosong', val.kosong.length, '#6b7280', '#f3f4f6')), V.confirmModal.type === 'draft' && val.galat.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:12.5px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:9px 12px;')
+    }, "⚠ Masih ada ", /*#__PURE__*/React.createElement("strong", null, val.galat.length, " galat"), " — data tersimpan sebagai draf dan dapat diperbaiki sebelum finalisasi."), V.confirmModal.type === 'draft' && val.galat.length === 0 && /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:12.5px;font-weight:700;color:#166534;background:#dcfce7;border:1px solid #bbf7d0;border-radius:9px;padding:9px 12px;text-align:center;')
+    }, "✓ Tidak ada galat — bisa langsung difinalisasi atau simpan dulu sebagai draf."), V.confirmModal.type === 'final' && /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:12.5px;font-weight:700;color:#166534;background:#dcfce7;border:1px solid #bbf7d0;border-radius:9px;padding:9px 12px;text-align:center;')
+    }, "✓ Tidak ada galat — data siap difinalisasi dan dikunci."), val.galat.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;flex-direction:column;gap:5px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:10.5px;font-weight:700;color:#9ba2b6;text-transform:uppercase;letter-spacing:0.05em;')
+    }, "Daftar Galat"), val.galat.slice(0, 5).map((g, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: css('font-size:12px;color:#7f1d1d;background:#fef2f2;border:1px solid #fde0e0;border-radius:7px;padding:7px 10px;')
+    }, /*#__PURE__*/React.createElement("strong", null, "Blok ", g.blok, "·R", g.rincian), " — ", g.label)), val.galat.length > 5 && /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:11.5px;color:#9ba2b6;text-align:center;')
+    }, "…dan ", val.galat.length - 5, " galat lainnya")), val.peringatan.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;flex-direction:column;gap:5px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:10.5px;font-weight:700;color:#9ba2b6;text-transform:uppercase;letter-spacing:0.05em;')
+    }, "Peringatan"), val.peringatan.map((g, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: css('font-size:12px;color:#78350f;background:#fffbeb;border:1px solid #fde68a;border-radius:7px;padding:7px 10px;')
+    }, /*#__PURE__*/React.createElement("strong", null, "Blok ", g.blok, "·R", g.rincian), " — ", g.label)))), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;gap:10px;justify-content:flex-end;padding:14px 20px;border-top:1px solid #f0f0ee;')
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => V.onBatalKonfirmasi(),
+      style: css('padding:10px 18px;font-family:inherit;font-size:13px;font-weight:600;border:1.5px solid #e0e0de;background:#fff;color:#3d4152;border-radius:9px;cursor:pointer;')
+    }, "Batal"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => V.onKonfirmasiOk(),
+      style: css('padding:10px 22px;font-family:inherit;font-size:13.5px;font-weight:700;border:none;border-radius:9px;color:#fff;background:' + (V.confirmModal.type === 'draft' ? ORANGE : '#16a34a') + ';cursor:pointer;')
+    }, V.confirmModal.type === 'draft' ? 'Simpan Draf' : 'Ya, Finalisasi')))), k._showRingkasan && /*#__PURE__*/React.createElement("div", {
       onClick: () => this.toggleRingkasan(false),
       style: css('position:fixed;inset:0;z-index:80;background:rgba(15,18,28,0.45);display:flex;align-items:center;justify-content:center;padding:20px;animation:fadein 0.15s ease;')
     }, /*#__PURE__*/React.createElement("div", {
@@ -3711,6 +3810,34 @@ class Component extends React.Component {
       style: css('flex:1;')
     }, g.label), /*#__PURE__*/React.createElement("span", {
       style: css('flex:none;color:#b91c1c;')
+    }, "›")))), val.peringatan.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;flex-direction:column;gap:6px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11px;font-weight:700;color:#9ba2b6;text-transform:uppercase;letter-spacing:0.05em;')
+    }, "Peringatan — klik untuk menuju"), val.peringatan.map((g, i) => /*#__PURE__*/React.createElement("button", {
+      key: i,
+      onClick: () => this.goIssue(g),
+      style: css('text-align:left;font-size:12px;color:#78350f;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 11px;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:8px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('flex:none;font-weight:800;color:#d97706;')
+    }, "Blok ", g.blok, "·R", g.rincian), /*#__PURE__*/React.createElement("span", {
+      style: css('flex:1;')
+    }, g.label), /*#__PURE__*/React.createElement("span", {
+      style: css('flex:none;color:#d97706;')
+    }, "›")))), val.kosong.length > 0 && /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;flex-direction:column;gap:6px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11px;font-weight:700;color:#9ba2b6;text-transform:uppercase;letter-spacing:0.05em;')
+    }, "Kosong (Opsional) — klik untuk menuju"), val.kosong.map((g, i) => /*#__PURE__*/React.createElement("button", {
+      key: i,
+      onClick: () => this.goIssue(g),
+      style: css('text-align:left;font-size:12px;color:#374151;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:8px 11px;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:8px;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('flex:none;font-weight:800;color:#6b7280;')
+    }, "Blok ", g.blok, "·R", g.rincian), /*#__PURE__*/React.createElement("span", {
+      style: css('flex:1;')
+    }, g.label), /*#__PURE__*/React.createElement("span", {
+      style: css('flex:none;color:#6b7280;')
     }, "›"))))))));
   }
   render() {
