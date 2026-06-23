@@ -1920,6 +1920,34 @@ class Component extends React.Component {
   }
   dataToForm(w) {
     const clone = JSON.parse(JSON.stringify(w));
+    // Migrate: if aset was corrupted to an array by an earlier save, rebuild object from array
+    if (Array.isArray(clone.aset)) {
+      const arr = clone.aset;
+      clone.aset = {
+        tabungGas3: '',
+        tabungGas55: '',
+        kulkas: '',
+        ac: '',
+        emas: '',
+        komputer: '',
+        sepedaMotor: '',
+        nilaiSepedaMotor: '',
+        mobil: '',
+        nilaiMobil: '',
+        lahanLain: '',
+        bangunanLain: ''
+      };
+      if (arr.indexOf('Sepeda Motor') >= 0) {
+        clone.aset.sepedaMotor = 1;
+        clone.aset.nilaiSepedaMotor = '';
+      }
+      if (arr.indexOf('Mobil') >= 0) {
+        clone.aset.mobil = 1;
+        clone.aset.nilaiMobil = '';
+      }
+      if (arr.indexOf('Kulkas') >= 0) clone.aset.kulkas = 1;
+      if (arr.indexOf('AC') >= 0) clone.aset.ac = 1;
+    }
     return Object.assign(clone, {
       isNew: false,
       desilManual: !!w.desilManual,
@@ -2394,7 +2422,8 @@ class Component extends React.Component {
     const base = Object.assign({}, struct, identity, summary, {
       status: status,
       foto: foto,
-      jumlahAnggotaKK: f.jumlahAnggotaKK || summary.jumlahAnggota
+      jumlahAnggotaKK: f.jumlahAnggotaKK || summary.jumlahAnggota,
+      aset: struct.aset
     });
     this.setState(s => {
       const warga = s.warga.slice();
@@ -2797,7 +2826,7 @@ class Component extends React.Component {
           metaStr: awal ? 'Snapshot awal' : np > 0 ? np + ' field berubah' : 'Tidak ada perubahan',
           metaStyle: 'font-size:11.5px;font-weight:700;color:' + (awal ? '#9ba2b6' : np > 0 ? '#b45309' : '#9ba2b6') + ';',
           onClick: () => this.pilihTanggal(sn.tanggal),
-          rowStyle: 'display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;border:none;cursor:pointer;padding:12px 14px;border-radius:10px;font-family:inherit;background:' + (active ? '#eef2fc' : 'transparent') + ';border-left:3px solid ' + (active ? '#1e50d0' : 'transparent') + ';'
+          rowStyle: 'display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;border:none;cursor:pointer;padding:12px 14px;border-radius:10px;font-family:inherit;background:' + (active ? '#eef2fc' : 'transparent') + ';border-left:3px solid ' + (active ? '#1e50d0' : 'transparent') + ';transition:background 0.15s,border-color 0.15s;'
         };
       });
       const snap = rw.snapshots.find(s => s.tanggal === st.selectedTanggal) || sorted[0];
@@ -3078,9 +3107,9 @@ class Component extends React.Component {
         return /*#__PURE__*/React.createElement("label", {
           key: i,
           onClick: () => this.setForm(o.p, opt),
-          style: css('display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:8px;cursor:pointer;font-size:13px;border:1.5px solid ' + (on ? '#f3cba8' : '#ececea') + ';background:' + (on ? ORANGE_BG : '#fff') + ';color:' + (on ? '#9a4a12' : '#3d4152') + ';font-weight:' + (on ? '700' : '500') + ';')
+          style: css('display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:8px;cursor:pointer;font-size:13px;border:1.5px solid ' + (on ? '#f3cba8' : '#ececea') + ';background:' + (on ? ORANGE_BG : '#fff') + ';color:' + (on ? '#9a4a12' : '#3d4152') + ';font-weight:' + (on ? '700' : '500') + ';transition:background 0.13s,border-color 0.13s,color 0.13s;')
         }, /*#__PURE__*/React.createElement("span", {
-          style: css('flex:none;width:16px;height:16px;border-radius:50%;border:2px solid ' + (on ? ORANGE : '#c4c8d4') + ';background:' + (on ? 'radial-gradient(circle, ' + ORANGE + ' 0 4px, #fff 5px)' : '#fff') + ';')
+          style: css('flex:none;width:16px;height:16px;border-radius:50%;border:2px solid ' + (on ? ORANGE : '#c4c8d4') + ';background:' + (on ? 'radial-gradient(circle, ' + ORANGE + ' 0 4px, #fff 5px)' : '#fff') + ';transition:border-color 0.13s,background 0.13s;')
         }), opt);
       }));
     } else if (o.type === 'select') {
@@ -3120,7 +3149,7 @@ class Component extends React.Component {
     return /*#__PURE__*/React.createElement("div", {
       key: o.p,
       id: 'f_' + o.p,
-      style: css('display:grid;grid-template-columns:minmax(150px,38%) 1fr;gap:18px;align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;')
+      style: css('display:grid;grid-template-columns:minmax(150px,38%) 1fr;gap:18px;align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;animation:fadein 0.18s ease;')
     }, /*#__PURE__*/React.createElement("div", {
       style: css('font-size:13px;font-weight:600;color:#2c3442;line-height:1.5;padding-top:7px;')
     }, /*#__PURE__*/React.createElement("span", {
@@ -3146,7 +3175,7 @@ class Component extends React.Component {
       return /*#__PURE__*/React.createElement("button", {
         key: opt,
         onClick: () => this.setForm(path, opt),
-        style: css('padding:4px 13px;border-radius:7px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid ' + (on ? ya ? '#f0b4b4' : '#bfcef8' : '#e0e0de') + ';background:' + (on ? ya ? '#fdecec' : '#eef2fc' : '#fff') + ';color:' + (on ? ya ? '#b91c1c' : '#1e50d0' : '#9ba2b6') + ';')
+        style: css('padding:4px 13px;border-radius:7px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid ' + (on ? ya ? '#f0b4b4' : '#bfcef8' : '#e0e0de') + ';background:' + (on ? ya ? '#fdecec' : '#eef2fc' : '#fff') + ';color:' + (on ? ya ? '#b91c1c' : '#1e50d0' : '#9ba2b6') + ';transition:background 0.13s,border-color 0.13s,color 0.13s;')
       }, ya ? 'Ya' : 'Tidak');
     })));
   }
@@ -3260,7 +3289,9 @@ class Component extends React.Component {
         opts: KODE.alamatSesuaiKK,
         req: true
       }];
-      return /*#__PURE__*/React.createElement("div", null, sub('Identitas Wilayah & Keluarga'), F.map(d => fld(d)), /*#__PURE__*/React.createElement("div", {
+      return /*#__PURE__*/React.createElement("div", {
+        style: css('animation:fadein 0.2s ease;')
+      }, sub('Identitas Wilayah & Keluarga'), F.map(d => fld(d)), /*#__PURE__*/React.createElement("div", {
         style: css('display:grid;grid-template-columns:minmax(150px,38%) 1fr;gap:18px;align-items:start;padding:13px 0;')
       }, /*#__PURE__*/React.createElement("div", {
         style: css('font-size:13px;font-weight:600;color:#2c3442;padding-top:7px;')
@@ -3353,7 +3384,9 @@ class Component extends React.Component {
           style: css('display:none;')
         })));
       };
-      return /*#__PURE__*/React.createElement("div", null, fields(BLOK2), /*#__PURE__*/React.createElement("div", {
+      return /*#__PURE__*/React.createElement("div", {
+        style: css('animation:fadein 0.2s ease;')
+      }, fields(BLOK2), /*#__PURE__*/React.createElement("div", {
         id: "sec-meteran",
         style: css('background:' + ORANGE_BG + ';border:1px solid #f3cba8;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:12px;margin:14px 0;')
       }, /*#__PURE__*/React.createElement("div", {
@@ -3380,7 +3413,9 @@ class Component extends React.Component {
         style: css('display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;')
       }, fotoSlot('depan', 'a. Tampak depan (atap & dinding)', true), fotoSlot('ruangTamu', 'b. Ruang tamu (dinding & lantai)', true), fotoSlot('kamarMandi', 'c. Kamar mandi (kloset)', false))));
     };
-    const blokIII = () => /*#__PURE__*/React.createElement("div", null, sub('22. Aset Bergerak'), ASET22.map(a => this.field({
+    const blokIII = () => /*#__PURE__*/React.createElement("div", {
+      style: css('animation:fadein 0.2s ease;')
+    }, sub('22. Aset Bergerak'), ASET22.map(a => this.field({
       p: 'aset.' + a[0],
       r: '22',
       label: a[1] + ' (' + a[2] + ')',
@@ -3491,7 +3526,9 @@ class Component extends React.Component {
           style: css('font-size:12px;font-weight:800;color:' + ORANGE + ';margin-bottom:6px;')
         }, "39. Keluhan kesehatan kronis/menahun"), KESEHATAN_ITEMS.map(it => this.yt(base + 'kesehatan.' + it[0], it[1], getPath(a, 'kesehatan.' + it[0])))));
       });
-      return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      return /*#__PURE__*/React.createElement("div", {
+        style: css('animation:fadein 0.2s ease;')
+      }, /*#__PURE__*/React.createElement("div", {
         style: css('display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;')
       }, /*#__PURE__*/React.createElement("span", {
         style: css('font-size:12.5px;color:#9ba2b6;')
@@ -3502,7 +3539,9 @@ class Component extends React.Component {
         style: css('display:flex;flex-direction:column;gap:10px;')
       }, anggota));
     };
-    const blokV = () => /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("textarea", {
+    const blokV = () => /*#__PURE__*/React.createElement("div", {
+      style: css('animation:fadein 0.2s ease;')
+    }, /*#__PURE__*/React.createElement("textarea", {
       value: k.catatan || '',
       onChange: e => this.setForm('catatan', e.target.value),
       placeholder: "Catatan pencacah (opsional)…",
@@ -3557,7 +3596,7 @@ class Component extends React.Component {
       return /*#__PURE__*/React.createElement("button", {
         key: romawi,
         onClick: () => this.goBlok(romawi),
-        style: css('width:100%;text-align:left;display:flex;align-items:center;gap:9px;padding:10px 12px;border:none;border-radius:9px;cursor:pointer;font-family:inherit;font-size:12.5px;line-height:1.35;font-weight:' + (on ? '700' : '500') + ';color:' + (on ? '#fff' : '#3d4152') + ';background:' + (on ? ORANGE : 'transparent') + ';')
+        style: css('width:100%;text-align:left;display:flex;align-items:center;gap:9px;padding:10px 12px;border:none;border-radius:9px;cursor:pointer;font-family:inherit;font-size:12.5px;line-height:1.35;font-weight:' + (on ? '700' : '500') + ';color:' + (on ? '#fff' : '#3d4152') + ';background:' + (on ? ORANGE : 'transparent') + ';transition:background 0.15s,color 0.15s;')
       }, /*#__PURE__*/React.createElement("span", {
         style: css('flex:1;')
       }, romawi, ". ", label), on ? null : dot(gB[romawi] || 0));
@@ -3585,12 +3624,12 @@ class Component extends React.Component {
     }, prog.pct, "%")), /*#__PURE__*/React.createElement("div", {
       style: css('height:8px;border-radius:6px;background:#f0f0ee;overflow:hidden;')
     }, /*#__PURE__*/React.createElement("div", {
-      style: css('height:100%;width:' + prog.pct + '%;background:' + ORANGE + ';border-radius:6px;')
+      style: css('height:100%;width:' + prog.pct + '%;background:' + ORANGE + ';border-radius:6px;transition:width 0.3s ease;')
     })), /*#__PURE__*/React.createElement("div", {
       style: css('font-size:11px;color:#9ba2b6;margin-top:5px;')
     }, prog.filled, " / ", prog.total, " field wajib terisi"), /*#__PURE__*/React.createElement("button", {
       onClick: () => this.toggleRingkasan(true),
-      style: css('margin-top:10px;width:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:9px;border-radius:9px;border:1.5px solid ' + (val.galat.length ? '#fbc5c5' : '#bbf7d0') + ';background:' + (val.galat.length ? '#fef2f2' : '#f0fdf4') + ';color:' + (val.galat.length ? '#b91c1c' : '#166534') + ';font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;')
+      style: css('margin-top:10px;width:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:9px;border-radius:9px;border:1.5px solid ' + (val.galat.length ? '#fbc5c5' : '#bbf7d0') + ';background:' + (val.galat.length ? '#fef2f2' : '#f0fdf4') + ';color:' + (val.galat.length ? '#b91c1c' : '#166534') + ';font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;transition:background 0.2s,border-color 0.2s,color 0.2s;')
     }, "Ringkasan ", val.galat.length > 0 ? /*#__PURE__*/React.createElement("span", {
       style: css('background:#b91c1c;color:#fff;border-radius:9px;padding:0 7px;font-size:11px;')
     }, val.galat.length) : '✓')), navItem('I', 'Keterangan Identitas Keluarga'), navItem('II', 'Keterangan Perumahan'), ab === 'II' && meteranNav, navItem('III', 'Keterangan Kepemilikan Aset'), navItem('IV', 'Keterangan Anggota Keluarga'), ab === 'IV' && anggotaNav, navItem('V', 'Catatan'));
@@ -3893,7 +3932,7 @@ class Component extends React.Component {
       style: css('text-align:right; padding:12px 16px; font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.06em;')
     }, "Aksi"))), /*#__PURE__*/React.createElement("tbody", null, V.wargaTampil.map((w, i) => /*#__PURE__*/React.createElement("tr", {
       key: w.id,
-      style: css('border-top:1px solid #f0f0ee;'),
+      style: css('border-top:1px solid #f0f0ee;transition:background 0.12s;'),
       onMouseEnter: w.onHover,
       onMouseLeave: w.onLeave
     }, /*#__PURE__*/React.createElement("td", {

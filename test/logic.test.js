@@ -201,3 +201,23 @@ test('roster handlers add/remove members and resize the meteran roster', () => {
   c.setJumlahMeteran(0);
   assert.equal(c.state.form.meteran.length, 0);
 });
+
+test('simpanKeluarga preserves aset as object (regression: summary.aset array must not overwrite struct)', () => {
+  const c = makeInstance({ auth: { role: 'Operator', nama: 'Op', wilayah: null } });
+  // Start from a seed warga that already has the correct aset object
+  const w = c.state.warga[0];
+  c.state.form = c.dataToForm(w);
+  c.state.editId = w.id;
+  // Save as draft
+  c.simpanKeluarga('draft');
+  // Reload the saved warga and open its form
+  const saved = c.state.warga.find(x => x.id === w.id);
+  assert.ok(saved, 'warga still present after save');
+  assert.ok(!Array.isArray(saved.aset), 'saved warga.aset must remain an object, not an array');
+  assert.equal(typeof saved.aset, 'object');
+  assert.ok('tabungGas3' in saved.aset, 'aset object must have field tabungGas3');
+  // Re-editing should give form.aset as object with correct fields
+  const form2 = c.dataToForm(saved);
+  assert.ok(!Array.isArray(form2.aset), 'form.aset must be object after re-edit');
+  assert.ok('sepedaMotor' in form2.aset, 'form.aset must have sepedaMotor key');
+});

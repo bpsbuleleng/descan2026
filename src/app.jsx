@@ -496,6 +496,16 @@ class Component extends React.Component {
   }
   dataToForm(w){
     const clone=JSON.parse(JSON.stringify(w));
+    // Migrate: if aset was corrupted to an array by an earlier save, rebuild object from array
+    if(Array.isArray(clone.aset)){
+      const arr=clone.aset;
+      clone.aset={tabungGas3:'',tabungGas55:'',kulkas:'',ac:'',emas:'',komputer:'',
+        sepedaMotor:'',nilaiSepedaMotor:'',mobil:'',nilaiMobil:'',lahanLain:'',bangunanLain:''};
+      if(arr.indexOf('Sepeda Motor')>=0){clone.aset.sepedaMotor=1;clone.aset.nilaiSepedaMotor='';}
+      if(arr.indexOf('Mobil')>=0){clone.aset.mobil=1;clone.aset.nilaiMobil='';}
+      if(arr.indexOf('Kulkas')>=0) clone.aset.kulkas=1;
+      if(arr.indexOf('AC')>=0) clone.aset.ac=1;
+    }
     return Object.assign(clone,{isNew:false, desilManual:!!w.desilManual, desil:String(w.desil||5), bansos:w.bansos||'Tidak Ada', _openIdx:0, _activeBlok:'I', _showRingkasan:false});
   }
   opName(){ return (this.state&&this.state.auth&&this.state.auth.nama)||this.props.namaOperator||'Budi Santoso'; }
@@ -646,7 +656,7 @@ class Component extends React.Component {
     const foto=Object.assign({},(f.rumah&&f.rumah.foto)||this.emptyFoto());
     const struct=JSON.parse(JSON.stringify(f)); delete struct.isNew; delete struct._openIdx; delete struct._activeBlok; delete struct._showRingkasan;
     const identity={id:f.id,noKK:f.noKK,nik:f.nik,nama:f.nama,desa:f.desa,dusun:f.dusun,rt:f.rt,rw:f.rw,alamat:f.alamat};
-    const base=Object.assign({},struct,identity,summary,{status:status,foto:foto,jumlahAnggotaKK:f.jumlahAnggotaKK||summary.jumlahAnggota});
+    const base=Object.assign({},struct,identity,summary,{status:status,foto:foto,jumlahAnggotaKK:f.jumlahAnggotaKK||summary.jumlahAnggota,aset:struct.aset});
     this.setState(s=>{
       const warga=s.warga.slice(); const idx=warga.findIndex(w=>w.id===f.id); const baru=idx<0;
       if(baru){ warga.push(Object.assign({},base,{snapshots:[{tanggal:today,operator:operator,data:summary,foto:foto,fieldYangBerubah:[]}]})); }
@@ -762,7 +772,7 @@ class Component extends React.Component {
           metaStr:awal?'Snapshot awal':(np>0?np+' field berubah':'Tidak ada perubahan'),
           metaStyle:'font-size:11.5px;font-weight:700;color:'+(awal?'#9ba2b6':(np>0?'#b45309':'#9ba2b6'))+';',
           onClick:()=>this.pilihTanggal(sn.tanggal),
-          rowStyle:'display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;border:none;cursor:pointer;padding:12px 14px;border-radius:10px;font-family:inherit;background:'+(active?'#eef2fc':'transparent')+';border-left:3px solid '+(active?'#1e50d0':'transparent')+';'}; });
+          rowStyle:'display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;border:none;cursor:pointer;padding:12px 14px;border-radius:10px;font-family:inherit;background:'+(active?'#eef2fc':'transparent')+';border-left:3px solid '+(active?'#1e50d0':'transparent')+';transition:background 0.15s,border-color 0.15s;'}; });
       const snap=rw.snapshots.find(s=>s.tanggal===st.selectedTanggal)||sorted[0];
       if(snap){
         const ch={}; snap.fieldYangBerubah.forEach(x=>{ch[x.label]=true;}); const ks=this.diffKeys();
@@ -864,8 +874,8 @@ class Component extends React.Component {
     if(o.type==='radio'){
       control=(<div style={css('display:flex;flex-direction:column;gap:6px;')}>
         {o.opts.map((opt,i)=>{ const on=o.value===opt; return (
-          <label key={i} onClick={()=>this.setForm(o.p,opt)} style={css('display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:8px;cursor:pointer;font-size:13px;border:1.5px solid '+(on?'#f3cba8':'#ececea')+';background:'+(on?ORANGE_BG:'#fff')+';color:'+(on?'#9a4a12':'#3d4152')+';font-weight:'+(on?'700':'500')+';')}>
-            <span style={css('flex:none;width:16px;height:16px;border-radius:50%;border:2px solid '+(on?ORANGE:'#c4c8d4')+';background:'+(on?'radial-gradient(circle, '+ORANGE+' 0 4px, #fff 5px)':'#fff')+';')}></span>{opt}
+          <label key={i} onClick={()=>this.setForm(o.p,opt)} style={css('display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:8px;cursor:pointer;font-size:13px;border:1.5px solid '+(on?'#f3cba8':'#ececea')+';background:'+(on?ORANGE_BG:'#fff')+';color:'+(on?'#9a4a12':'#3d4152')+';font-weight:'+(on?'700':'500')+';transition:background 0.13s,border-color 0.13s,color 0.13s;')}>
+            <span style={css('flex:none;width:16px;height:16px;border-radius:50%;border:2px solid '+(on?ORANGE:'#c4c8d4')+';background:'+(on?'radial-gradient(circle, '+ORANGE+' 0 4px, #fff 5px)':'#fff')+';transition:border-color 0.13s,background 0.13s;')}></span>{opt}
           </label>); })}
       </div>);
     } else if(o.type==='select'){
@@ -882,7 +892,7 @@ class Component extends React.Component {
         </div>}
       </div>);
     }
-    return (<div key={o.p} id={'f_'+o.p} style={css('display:grid;grid-template-columns:minmax(150px,38%) 1fr;gap:18px;align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;')}>
+    return (<div key={o.p} id={'f_'+o.p} style={css('display:grid;grid-template-columns:minmax(150px,38%) 1fr;gap:18px;align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;animation:fadein 0.18s ease;')}>
       <div style={css('font-size:13px;font-weight:600;color:#2c3442;line-height:1.5;padding-top:7px;')}><span style={css('color:#b0b5c2;font-weight:700;margin-right:6px;')}>{o.r}.</span>{o.label}{o.req?<span style={css('color:'+ORANGE+';')}> *</span>:null}{o.hint?<div style={css('color:'+ORANGE+';font-style:italic;font-size:11px;font-weight:600;margin-top:3px;')}>{o.hint}</div>:null}</div>
       <div>{control}</div>
     </div>);
@@ -893,7 +903,7 @@ class Component extends React.Component {
       <span style={css('font-size:12.5px;color:#3d4152;flex:1;')}>{label}</span>
       <div style={css('display:flex;gap:6px;flex:none;')}>
         {['1. Ya','2. Tidak'].map(opt=>{ const on=value===opt; const ya=/Ya/.test(opt); return (
-          <button key={opt} onClick={()=>this.setForm(path,opt)} style={css('padding:4px 13px;border-radius:7px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid '+(on?(ya?'#f0b4b4':'#bfcef8'):'#e0e0de')+';background:'+(on?(ya?'#fdecec':'#eef2fc'):'#fff')+';color:'+(on?(ya?'#b91c1c':'#1e50d0'):'#9ba2b6')+';')}>{ya?'Ya':'Tidak'}</button>); })}
+          <button key={opt} onClick={()=>this.setForm(path,opt)} style={css('padding:4px 13px;border-radius:7px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid '+(on?(ya?'#f0b4b4':'#bfcef8'):'#e0e0de')+';background:'+(on?(ya?'#fdecec':'#eef2fc'):'#fff')+';color:'+(on?(ya?'#b91c1c':'#1e50d0'):'#9ba2b6')+';transition:background 0.13s,border-color 0.13s,color 0.13s;')}>{ya?'Ya':'Tidak'}</button>); })}
       </div>
     </div>);
   }
@@ -927,7 +937,7 @@ class Component extends React.Component {
         {p:'statusKeluarga',r:'16',label:'Status Keberadaan Keluarga',type:'radio',opts:KODE.statusKeluarga,req:true},
         {p:'alamatSesuaiKK',r:'4',label:'Apakah alamat tersebut sesuai dengan alamat pada Kartu Keluarga?',type:'radio',opts:KODE.alamatSesuaiKK,req:true}
       ];
-      return (<div>{sub('Identitas Wilayah & Keluarga')}{F.map(d=>fld(d))}
+      return (<div style={css('animation:fadein 0.2s ease;')}>{sub('Identitas Wilayah & Keluarga')}{F.map(d=>fld(d))}
         <div style={css('display:grid;grid-template-columns:minmax(150px,38%) 1fr;gap:18px;align-items:start;padding:13px 0;')}>
           <div style={css('font-size:13px;font-weight:600;color:#2c3442;padding-top:7px;')}><span style={css('color:#b0b5c2;font-weight:700;margin-right:6px;')}>3l.</span>Geotagging lokasi (Lat / Long / Akurasi)</div>
           <div style={css('display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;')}>
@@ -951,7 +961,7 @@ class Component extends React.Component {
           {has?(<div><div style={css('height:140px;border-radius:10px;overflow:hidden;background:#0c1422;')}><img src={ft.src} style={css('width:100%;height:100%;object-fit:cover;display:block;')} /></div><div style={css('display:flex;justify-content:space-between;align-items:center;margin-top:6px;')}><span style={css('font-size:10.5px;font-family:Menlo,monospace;color:'+(ft.uploading?'#b45309':(ft.driveId?'#166534':'#52576b'))+';')}>{ft.uploading?'⤓ mengunggah ke Drive…':(ft.driveId?'✓ tersimpan di Drive':this.formatBytes(ft.before)+' → '+this.formatBytes(ft.after))}</span><button onClick={()=>this.hapusFoto('rumah.foto.'+slot)} style={css('font-size:11.5px;color:#dc2626;background:none;border:none;cursor:pointer;font-weight:700;font-family:inherit;padding:0;')}>Hapus</button></div></div>)
           :(<label style={css('display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:140px;border:1.5px dashed #d4d4d0;border-radius:10px;background:repeating-linear-gradient(45deg,#f7f7f5,#f7f7f5 8px,#fafaf9 8px,#fafaf9 16px);cursor:pointer;text-align:center;padding:12px;')}><span style={css('font-size:13px;font-weight:700;color:#52576b;')}>Unggah Foto</span><span style={css('font-size:10.5px;color:#9ba2b6;font-family:Menlo,monospace;')}>auto-kompres &lt;200 KB</span><input type="file" accept="image/*" onChange={e=>this.handleFoto('rumah.foto.'+slot,e)} style={css('display:none;')} /></label>)}
         </div>); };
-      return (<div>
+      return (<div style={css('animation:fadein 0.2s ease;')}>
         {fields(BLOK2)}
         <div id="sec-meteran" style={css('background:'+ORANGE_BG+';border:1px solid #f3cba8;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:12px;margin:14px 0;')}>
           <div style={css('display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;')}>
@@ -975,7 +985,7 @@ class Component extends React.Component {
         </div>
       </div>);
     };
-    const blokIII=()=>(<div>
+    const blokIII=()=>(<div style={css('animation:fadein 0.2s ease;')}>
       {sub('22. Aset Bergerak')}
       {ASET22.map(a=>this.field({p:'aset.'+a[0],r:'22',label:a[1]+' ('+a[2]+')',type:'number',req:true,value:getPath(k,'aset.'+a[0])}))}
       {Number(getPath(k,'aset.sepedaMotor'))>0&&this.field({p:'aset.nilaiSepedaMotor',r:'22g',label:'Total nilai aset sepeda motor',type:'rupiah',req:true,value:getPath(k,'aset.nilaiSepedaMotor')})}
@@ -1019,7 +1029,7 @@ class Component extends React.Component {
             </div>
           </div>);
       });
-      return (<div>
+      return (<div style={css('animation:fadein 0.2s ease;')}>
         <div style={css('display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;')}>
           <span style={css('font-size:12.5px;color:#9ba2b6;')}>{(k.anggota||[]).length} anggota</span>
           <button onClick={()=>this.tambahAnggota()} style={css('font-size:12.5px;font-weight:700;color:#fff;background:'+ORANGE+';border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-family:inherit;')}>+ Tambah Anggota</button>
@@ -1027,7 +1037,7 @@ class Component extends React.Component {
         <div style={css('display:flex;flex-direction:column;gap:10px;')}>{anggota}</div>
       </div>);
     };
-    const blokV=()=>(<div>
+    const blokV=()=>(<div style={css('animation:fadein 0.2s ease;')}>
       <textarea value={k.catatan||''} onChange={e=>this.setForm('catatan',e.target.value)} placeholder="Catatan pencacah (opsional)…" style={css('width:100%;padding:10px 12px;border:1.5px solid #e0e0de;border-radius:9px;font-size:13.5px;color:#18191f;background:#fff;height:80px;resize:vertical;line-height:1.6;font-family:inherit;')}></textarea>
       <div style={css('margin-top:16px;padding-top:14px;border-top:1px solid #f0f0ee;')}>
         <div style={css('font-size:12.5px;font-weight:800;color:#52576b;margin-bottom:10px;')}>Penetapan Desa (internal — bukan bagian kuesioner)</div>
@@ -1048,7 +1058,7 @@ class Component extends React.Component {
     // ---- Sidebar ----
     const dot=(n)=>n>0?<span style={css('flex:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#fef2f2;color:#b91c1c;font-size:10.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;border:1px solid #fbc5c5;')}>{n}</span>:<span style={css('flex:none;width:8px;height:8px;border-radius:50%;background:#cbe8cf;')}></span>;
     const navItem=(romawi,label)=>{ const on=ab===romawi; return (
-      <button key={romawi} onClick={()=>this.goBlok(romawi)} style={css('width:100%;text-align:left;display:flex;align-items:center;gap:9px;padding:10px 12px;border:none;border-radius:9px;cursor:pointer;font-family:inherit;font-size:12.5px;line-height:1.35;font-weight:'+(on?'700':'500')+';color:'+(on?'#fff':'#3d4152')+';background:'+(on?ORANGE:'transparent')+';')}>
+      <button key={romawi} onClick={()=>this.goBlok(romawi)} style={css('width:100%;text-align:left;display:flex;align-items:center;gap:9px;padding:10px 12px;border:none;border-radius:9px;cursor:pointer;font-family:inherit;font-size:12.5px;line-height:1.35;font-weight:'+(on?'700':'500')+';color:'+(on?'#fff':'#3d4152')+';background:'+(on?ORANGE:'transparent')+';transition:background 0.15s,color 0.15s;')}>
         <span style={css('flex:1;')}>{romawi}. {label}</span>{on?null:dot(gB[romawi]||0)}
       </button>); };
     const meteranNav=(k.meteran||[]).map((m,i)=>(<button key={'m'+i} onClick={()=>this.goBlok('II',null,'meteran.'+i+'.daya')} style={css('width:100%;text-align:left;padding:5px 12px 5px 28px;border:none;background:none;cursor:pointer;font-family:inherit;font-size:11.5px;color:#6b7280;')}>↳ Meteran ke-{i+1}</button>));
@@ -1058,9 +1068,9 @@ class Component extends React.Component {
       <aside style={css('flex:none;width:248px;align-self:flex-start;position:sticky;top:78px;background:#fff;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);padding:14px;display:flex;flex-direction:column;gap:6px;max-height:calc(100vh - 96px);overflow-y:auto;')}>
         <div style={css('padding:4px 4px 12px;border-bottom:1px solid #f0f0ee;margin-bottom:6px;')}>
           <div style={css('display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;')}><span style={css('font-size:11px;font-weight:700;color:#9ba2b6;text-transform:uppercase;letter-spacing:0.05em;')}>Progres Pengisian</span><span style={css('font-size:12px;font-weight:800;color:'+ORANGE+';')}>{prog.pct}%</span></div>
-          <div style={css('height:8px;border-radius:6px;background:#f0f0ee;overflow:hidden;')}><div style={css('height:100%;width:'+prog.pct+'%;background:'+ORANGE+';border-radius:6px;')}></div></div>
+          <div style={css('height:8px;border-radius:6px;background:#f0f0ee;overflow:hidden;')}><div style={css('height:100%;width:'+prog.pct+'%;background:'+ORANGE+';border-radius:6px;transition:width 0.3s ease;')}></div></div>
           <div style={css('font-size:11px;color:#9ba2b6;margin-top:5px;')}>{prog.filled} / {prog.total} field wajib terisi</div>
-          <button onClick={()=>this.toggleRingkasan(true)} style={css('margin-top:10px;width:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:9px;border-radius:9px;border:1.5px solid '+(val.galat.length?'#fbc5c5':'#bbf7d0')+';background:'+(val.galat.length?'#fef2f2':'#f0fdf4')+';color:'+(val.galat.length?'#b91c1c':'#166534')+';font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;')}>Ringkasan {val.galat.length>0?<span style={css('background:#b91c1c;color:#fff;border-radius:9px;padding:0 7px;font-size:11px;')}>{val.galat.length}</span>:'✓'}</button>
+          <button onClick={()=>this.toggleRingkasan(true)} style={css('margin-top:10px;width:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:9px;border-radius:9px;border:1.5px solid '+(val.galat.length?'#fbc5c5':'#bbf7d0')+';background:'+(val.galat.length?'#fef2f2':'#f0fdf4')+';color:'+(val.galat.length?'#b91c1c':'#166534')+';font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;transition:background 0.2s,border-color 0.2s,color 0.2s;')}>Ringkasan {val.galat.length>0?<span style={css('background:#b91c1c;color:#fff;border-radius:9px;padding:0 7px;font-size:11px;')}>{val.galat.length}</span>:'✓'}</button>
         </div>
         {navItem('I','Keterangan Identitas Keluarga')}
         {navItem('II','Keterangan Perumahan')}
@@ -1271,7 +1281,7 @@ class Component extends React.Component {
                   </thead>
                   <tbody>
                     {V.wargaTampil.map((w,i)=>(
-                      <tr key={w.id} style={css('border-top:1px solid #f0f0ee;')} onMouseEnter={w.onHover} onMouseLeave={w.onLeave}>
+                      <tr key={w.id} style={css('border-top:1px solid #f0f0ee;transition:background 0.12s;')} onMouseEnter={w.onHover} onMouseLeave={w.onLeave}>
                         <td style={css('padding:13px 16px; vertical-align:middle;')}>
                           <div style={css('display:flex; align-items:center; gap:7px;')}><span style={css('font-size:13.5px; font-weight:700; color:#18191f;')}>{w.nama}</span><span style={css(w.statusBadgeStyle)}>{w.statusLabel}</span></div>
                           <div style={css('font-size:11px; color:#9ba2b6; margin-top:2px; font-variant-numeric:tabular-nums;')}>{w.nik}</div>
