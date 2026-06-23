@@ -5,8 +5,8 @@
 Object.assign(Component.prototype, {
 
   nav(key){ this.setState({view:key,form:key==='form'?this.state.form:null,showSanggahanForm:false,processingId:null}); },
-  onSearch(e){ this.setState({search:e.target.value}); },
-  onFilter(e){ const k=e.target.getAttribute('data-filter'); const o={}; o[k]=e.target.value; this.setState(o); },
+  onSearch(e){ this.setState({search:e.target.value,page:1}); },
+  onFilter(e){ const k=e.target.getAttribute('data-filter'); const o={}; o[k]=e.target.value; o.page=1; this.setState(o); },
   onTambah(){ if(!this.canCrud()) return; this.setState({form:this.blankForm(),editId:null,view:'form'}); },
   mulaiEdit(id){ if(!this.canCrud()) return; const w=this.state.warga.find(x=>x.id===id); this.setState({form:this.dataToForm(w),editId:id,view:'form'}); },
   onBatal(){ this.setState({confirmModal:{type:'batal'}}); },
@@ -154,7 +154,7 @@ Object.assign(Component.prototype, {
   bukaRiwayat(id){ const w=this.state.warga.find(x=>x.id===id); const last=w.snapshots[w.snapshots.length-1].tanggal; this.setState({view:'riwayat',selectedId:id,selectedTanggal:last,showSanggahanForm:false}); },
   pilihTanggal(t){ this.setState({selectedTanggal:t,showSanggahanForm:false}); },
   onKembali(){ this.setState({view:'daftar',selectedId:null,selectedTanggal:null,showSanggahanForm:false}); },
-  onSort(col){ this.setState(s=>({sortBy:col,sortDir:s.sortBy===col&&s.sortDir==='asc'?'desc':'asc'})); },
+  onSort(col){ this.setState(s=>({sortBy:col,sortDir:s.sortBy===col&&s.sortDir==='asc'?'desc':'asc',page:1})); },
   autoClear(){ clearTimeout(this._t); this._t=setTimeout(()=>this.setState({toast:null}),3600); },
 
   // Simpan keluarga. status='draft' selalu boleh (tersimpan langsung ke
@@ -167,7 +167,7 @@ Object.assign(Component.prototype, {
       const v=this.validateKeluarga(f);
       if(v.galat.length>0){ this.setState({toast:{type:'err',msg:'Belum bisa difinalisasi: masih ada '+v.galat.length+' GALAT yang harus diperbaiki.'}}); this.autoClear(); return; }
     }
-    const today=new Date().toISOString().slice(0,10), operator=this.opName();
+    const today=todayWITA(), operator=this.opName();
     const summary=this.deriveSummary(f);
     const foto=Object.assign({},(f.rumah&&f.rumah.foto)||this.emptyFoto());
     const struct=JSON.parse(JSON.stringify(f)); delete struct.isNew; delete struct._openIdx; delete struct._activeBlok; delete struct._showRingkasan;
@@ -178,7 +178,8 @@ Object.assign(Component.prototype, {
       if(baru){ warga.push(Object.assign({},base,{snapshots:[{tanggal:today,operator:operator,data:summary,foto:foto,fieldYangBerubah:[]}]})); }
       else {
         const w=warga[idx]; let snaps=w.snapshots.slice();
-        const before=snaps.filter(x=>x.tanggal<today).sort((a,b)=>a.tanggal<b.tanggal?1:-1)[0];
+        // Exclude today's snapshot (will be overwritten) so diff is always vs. previous save.
+        const before=snaps.filter(x=>x.tanggal!==today).sort((a,b)=>a.tanggal<b.tanggal?1:-1)[0];
         const diff=before?this.computeDiff(before.data,summary):[];
         const snap={tanggal:today,operator:operator,data:summary,foto:foto,fieldYangBerubah:diff};
         const si=snaps.findIndex(x=>x.tanggal===today);
@@ -208,5 +209,19 @@ Object.assign(Component.prototype, {
   updateStatus(id,status){ if(!this.canCrud()) return; this.setState(s=>({sanggahan:s.sanggahan.map(x=>x.id===id?Object.assign({},x,{status:status}):x)})); this.push('updateSanggahan',{id:id,status:status}); },
   mulaiProses(id){ if(!this.canCrud()) return; this.setState({processingId:id,processCatatan:''}); },
   selesaikanSanggahan(id,status,catatan){ if(!this.canCrud()) return; const tgl=this.state.today; this.setState(s=>({sanggahan:s.sanggahan.map(x=>x.id===id?Object.assign({},x,{status:status,catatanOperator:catatan,tanggalSelesai:s.today}):x),processingId:null,processCatatan:''})); this.push('updateSanggahan',{id:id,status:status,catatanOperator:catatan,tanggalSelesai:tgl}); },
+
+  hapusWarga(id){
+    if(!this.canCrud()) return;
+    const w=this.state.warga.find(x=>x.id===id); if(!w) return;
+    if(!window.confirm('Hapus data keluarga "'+w.nama+'"?\nSemua snapshot dan sanggahan terkait akan ikut terhapus permanen.')) return;
+    this.setState(s=>({
+      warga:s.warga.filter(x=>x.id!==id),
+      sanggahan:s.sanggahan.filter(x=>x.wargaId!==id),
+      view:'daftar', selectedId:null, selectedTanggal:null,
+      toast:{type:'ok',msg:'"'+w.nama+'" berhasil dihapus.'}
+    }));
+    this.push('deleteWarga',{id:id});
+    this.autoClear();
+  },
 
 });

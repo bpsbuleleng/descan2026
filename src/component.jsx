@@ -104,7 +104,8 @@ class Component extends React.Component {
       processingId:null, processCatatan:'',
       confirmModal:null, loading:false, sortBy:null, sortDir:'asc',
       isMobile:typeof window!=='undefined'&&window.innerWidth<768,
-      toast:null, today:new Date().toISOString().slice(0,10)};
+      page:1, showScrollTop:false,
+      toast:null, today:typeof todayWITA==='function'?todayWITA():new Date().toISOString().slice(0,10)};
   }
 
   // -- Persistensi data (localStorage) -----------------------------------------
@@ -127,8 +128,13 @@ class Component extends React.Component {
   componentDidMount(){
     this._onResize=()=>this.setState({isMobile:window.innerWidth<768});
     window.addEventListener('resize',this._onResize);
+    this._onScroll=()=>this.setState({showScrollTop:window.scrollY>300});
+    window.addEventListener('scroll',this._onScroll,{passive:true});
   }
-  componentWillUnmount(){ window.removeEventListener('resize',this._onResize); }
+  componentWillUnmount(){
+    window.removeEventListener('resize',this._onResize);
+    window.removeEventListener('scroll',this._onScroll);
+  }
   componentDidUpdate(_prevProps, prevState){
     if(prevState.warga!==this.state.warga || prevState.sanggahan!==this.state.sanggahan){
       this.saveStore(this.state);

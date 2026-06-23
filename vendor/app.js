@@ -30,6 +30,11 @@ function css(str) {
 // "anggota.2.disabilitas.fisik", "meteran.0.idPelanggan"). Immutable setPath
 // clones along the path so React state updates stay pure.
 // ---------------------------------------------------------------------------
+// Tanggal lokal WITA (UTC+8) dalam format YYYY-MM-DD.
+function todayWITA() {
+  var d = new Date();
+  return new Date(d.getTime() + 8 * 3600000).toISOString().slice(0, 10);
+}
 function getPath(obj, path) {
   var p = String(path).split('.'),
     c = obj;
@@ -668,8 +673,10 @@ class Component extends React.Component {
       sortBy: null,
       sortDir: 'asc',
       isMobile: typeof window !== 'undefined' && window.innerWidth < 768,
+      page: 1,
+      showScrollTop: false,
       toast: null,
-      today: new Date().toISOString().slice(0, 10)
+      today: typeof todayWITA === 'function' ? todayWITA() : new Date().toISOString().slice(0, 10)
     };
   }
 
@@ -745,9 +752,16 @@ class Component extends React.Component {
       isMobile: window.innerWidth < 768
     });
     window.addEventListener('resize', this._onResize);
+    this._onScroll = () => this.setState({
+      showScrollTop: window.scrollY > 300
+    });
+    window.addEventListener('scroll', this._onScroll, {
+      passive: true
+    });
   }
   componentWillUnmount() {
     window.removeEventListener('resize', this._onResize);
+    window.removeEventListener('scroll', this._onScroll);
   }
   componentDidUpdate(_prevProps, prevState) {
     if (prevState.warga !== this.state.warga || prevState.sanggahan !== this.state.sanggahan) {
@@ -2031,13 +2045,15 @@ Object.assign(Component.prototype, {
   },
   onSearch(e) {
     this.setState({
-      search: e.target.value
+      search: e.target.value,
+      page: 1
     });
   },
   onFilter(e) {
     const k = e.target.getAttribute('data-filter');
     const o = {};
     o[k] = e.target.value;
+    o.page = 1;
     this.setState(o);
   },
   onTambah() {
@@ -2480,7 +2496,8 @@ Object.assign(Component.prototype, {
   onSort(col) {
     this.setState(s => ({
       sortBy: col,
-      sortDir: s.sortBy === col && s.sortDir === 'asc' ? 'desc' : 'asc'
+      sortDir: s.sortBy === col && s.sortDir === 'asc' ? 'desc' : 'asc',
+      page: 1
     }));
   },
   autoClear() {
@@ -2517,7 +2534,7 @@ Object.assign(Component.prototype, {
         return;
       }
     }
-    const today = new Date().toISOString().slice(0, 10),
+    const today = todayWITA(),
       operator = this.opName();
     const summary = this.deriveSummary(f);
     const foto = Object.assign({}, f.rumah && f.rumah.foto || this.emptyFoto());
@@ -2560,7 +2577,8 @@ Object.assign(Component.prototype, {
       } else {
         const w = warga[idx];
         let snaps = w.snapshots.slice();
-        const before = snaps.filter(x => x.tanggal < today).sort((a, b) => a.tanggal < b.tanggal ? 1 : -1)[0];
+        // Exclude today's snapshot (will be overwritten) so diff is always vs. previous save.
+        const before = snaps.filter(x => x.tanggal !== today).sort((a, b) => a.tanggal < b.tanggal ? 1 : -1)[0];
         const diff = before ? this.computeDiff(before.data, summary) : [];
         const snap = {
           tanggal: today,
@@ -2707,6 +2725,27 @@ Object.assign(Component.prototype, {
       catatanOperator: catatan,
       tanggalSelesai: tgl
     });
+  },
+  hapusWarga(id) {
+    if (!this.canCrud()) return;
+    const w = this.state.warga.find(x => x.id === id);
+    if (!w) return;
+    if (!window.confirm('Hapus data keluarga "' + w.nama + '"?\nSemua snapshot dan sanggahan terkait akan ikut terhapus permanen.')) return;
+    this.setState(s => ({
+      warga: s.warga.filter(x => x.id !== id),
+      sanggahan: s.sanggahan.filter(x => x.wargaId !== id),
+      view: 'daftar',
+      selectedId: null,
+      selectedTanggal: null,
+      toast: {
+        type: 'ok',
+        msg: '"' + w.nama + '" berhasil dihapus.'
+      }
+    }));
+    this.push('deleteWarga', {
+      id: id
+    });
+    this.autoClear();
   }
 });
 
@@ -2774,7 +2813,13 @@ Object.assign(Component.prototype, {
         return sd === 'asc' ? c : -c;
       });
     }
-    const wargaTampil = list.map(w => {
+    const listAll = list;
+    const pageSize = 10;
+    const rawPage = st.page || 1;
+    const jumlahHalaman = Math.max(1, Math.ceil(listAll.length / pageSize));
+    const currentPage = Math.min(rawPage, jumlahHalaman);
+    const pageSlice = listAll.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    const wargaTampil = pageSlice.map(w => {
       const ds = this.getDS(w.desil);
       const bs = this.bansosStyle(w.bansos);
       const draf = w.status === 'draft';
@@ -2783,6 +2828,7 @@ Object.assign(Component.prototype, {
         nama: w.nama,
         nik: 'NIK ' + w.nik,
         dusun: w.dusun,
+        snapCount: w.snapshots.length,
         desilLabel: 'Desil ' + w.desil,
         desilBadgeStyle: 'display:inline-flex;align-items:center;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;color:' + ds.text + ';background:' + ds.bg + ';',
         bansos: w.bansos,
@@ -2791,7 +2837,6 @@ Object.assign(Component.prototype, {
         statusLabel: draf ? 'Draf' : 'Final',
         statusBadgeStyle: 'display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;color:' + (draf ? '#92400e' : '#166534') + ';background:' + (draf ? '#fef3c7' : '#dcfce7') + ';border:1px solid ' + (draf ? '#fde68a' : '#bbf7d0') + ';',
         onLihat: () => this.bukaRiwayat(w.id),
-        onEdit: () => this.mulaiEdit(w.id),
         onHover: e => {
           e.currentTarget.style.background = '#f9f9f7';
         },
@@ -2940,7 +2985,8 @@ Object.assign(Component.prototype, {
         desilStyle: 'display:inline-flex;align-items:center;padding:6px 13px;border-radius:20px;font-size:13px;font-weight:700;color:' + ds.text + ';background:' + ds.bg + ';',
         bansosStyle: 'display:inline-flex;align-items:center;padding:6px 13px;border-radius:20px;font-size:13px;font-weight:600;color:' + bs.text + ';background:' + bs.bg + ';',
         bansos: rw.bansos,
-        onEdit: () => this.mulaiEdit(rw.id)
+        onEdit: () => this.mulaiEdit(rw.id),
+        onHapus: () => this.hapusWarga(rw.id)
       };
       const earliest = rw.snapshots.slice().sort((a, b) => a.tanggal < b.tanggal ? -1 : 1)[0].tanggal;
       const sorted = rw.snapshots.slice().sort((a, b) => a.tanggal < b.tanggal ? 1 : -1);
@@ -3099,8 +3145,7 @@ Object.assign(Component.prototype, {
       sgFilterOpts: sgFilterOpts,
       wargaTampil: wargaTampil,
       kosong: wargaTampil.length === 0,
-      jumlahTampil: wargaTampil.length,
-      jumlahTotal: vWarga.length,
+      jumlahTampil: listAll.length,
       statTotal: statTotal,
       statPrioritas: statPrioritas,
       statBansos: statBansos,
@@ -3124,6 +3169,19 @@ Object.assign(Component.prototype, {
       sortDir: st.sortDir,
       loading: st.loading,
       isMobile: st.isMobile,
+      jumlahHalaman: jumlahHalaman,
+      currentPage: currentPage,
+      jumlahTotal: listAll.length,
+      onPrevPage: () => this.setState(s => ({
+        page: Math.max(1, (s.page || 1) - 1)
+      })),
+      onNextPage: () => this.setState(s => ({
+        page: Math.min(jumlahHalaman, (s.page || 1) + 1)
+      })),
+      onGoPage: p => this.setState({
+        page: p
+      }),
+      showScrollTop: st.showScrollTop,
       riwayatWarga: riwayatWarga,
       snapshotList: snapshotList,
       selectedSnap: selectedSnap || {
@@ -4253,8 +4311,8 @@ Object.assign(Component.prototype, {
         col: "bansos",
         label: "Bansos"
       }), /*#__PURE__*/React.createElement("th", {
-        style: css('text-align:right; padding:12px 16px; font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.06em;')
-      }, "Aksi"))), /*#__PURE__*/React.createElement("tbody", null, V.wargaTampil.map((w, i) => /*#__PURE__*/React.createElement("tr", {
+        style: css('padding:12px 16px; font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.06em;')
+      }))), /*#__PURE__*/React.createElement("tbody", null, V.wargaTampil.map((w, i) => /*#__PURE__*/React.createElement("tr", {
         key: w.id,
         style: css('border-top:1px solid #f0f0ee;transition:background 0.12s;'),
         onMouseEnter: w.onHover,
@@ -4269,7 +4327,9 @@ Object.assign(Component.prototype, {
         style: css(w.statusBadgeStyle)
       }, w.statusLabel)), /*#__PURE__*/React.createElement("div", {
         style: css('font-size:11px; color:#9ba2b6; margin-top:2px; font-variant-numeric:tabular-nums;')
-      }, w.nik)), /*#__PURE__*/React.createElement("td", {
+      }, w.nik, /*#__PURE__*/React.createElement("span", {
+        style: css('margin-left:8px;color:#d4d4d0;')
+      }, "· ", w.snapCount, " snp"))), /*#__PURE__*/React.createElement("td", {
         style: css('padding:12px 16px; vertical-align:middle;')
       }, /*#__PURE__*/React.createElement("div", {
         style: css('font-size:13px; font-weight:600; color:#3d4152;')
@@ -4283,22 +4343,34 @@ Object.assign(Component.prototype, {
         style: css(w.bansosBadgeStyle)
       }, w.bansos)), /*#__PURE__*/React.createElement("td", {
         style: css('padding:12px 16px; vertical-align:middle; text-align:right;')
-      }, /*#__PURE__*/React.createElement("div", {
-        style: css('display:inline-flex; gap:5px;')
       }, /*#__PURE__*/React.createElement("button", {
         onClick: w.onLihat,
-        title: "Lihat Riwayat",
-        style: css('width:32px;height:32px;border:1.5px solid #e0e0de;background:#fff;color:#3d4152;border-radius:8px;cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;')
-      }, "⊚"), V.canCrud && /*#__PURE__*/React.createElement("button", {
-        onClick: w.onEdit,
-        title: "Edit Data",
-        style: css('width:32px;height:32px;border:none;background:#1e50d0;color:#fff;border-radius:8px;cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;')
-      }, "✎"))))))), V.kosong && /*#__PURE__*/React.createElement("div", {
+        title: "Lihat Detail & Riwayat",
+        style: css('padding:6px 13px;border:1.5px solid #e0e0de;background:#fff;color:#3d4152;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;font-family:inherit;white-space:nowrap;')
+      }, "Lihat →")))))), V.kosong && /*#__PURE__*/React.createElement("div", {
         style: css('padding:40px; text-align:center; color:#9ba2b6; font-size:13.5px;')
       }, "Tidak ada rumah tangga yang cocok."));
-    })(), /*#__PURE__*/React.createElement("span", {
+    })(), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;')
+    }, /*#__PURE__*/React.createElement("span", {
       style: css('font-size:12px; color:#9ba2b6;')
-    }, "Menampilkan ", V.jumlahTampil, " dari ", V.jumlahTotal, " rumah tangga")), V.isForm && V.form && this.renderForm(V), V.isRiwayat && V.riwayatWarga && /*#__PURE__*/React.createElement("div", {
+    }, V.jumlahTampil, " rumah tangga · Hal. ", V.currentPage, " dari ", V.jumlahHalaman), V.jumlahHalaman > 1 && /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;gap:4px;align-items:center;')
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: V.onPrevPage,
+      disabled: V.currentPage <= 1,
+      style: css('padding:6px 11px;font-family:inherit;font-size:12.5px;font-weight:600;border:1.5px solid #e0e0de;background:#fff;color:' + (V.currentPage <= 1 ? '#c4c8d4' : '#3d4152') + ';border-radius:7px;cursor:' + (V.currentPage <= 1 ? 'not-allowed' : 'pointer') + ';')
+    }, "‹"), Array.from({
+      length: V.jumlahHalaman
+    }, (_, i) => i + 1).map(p => /*#__PURE__*/React.createElement("button", {
+      key: p,
+      onClick: () => V.onGoPage(p),
+      style: css('padding:6px 10px;font-family:inherit;font-size:12.5px;font-weight:' + (p === V.currentPage ? '700' : '500') + ';border:1.5px solid ' + (p === V.currentPage ? '#1e50d0' : '#e0e0de') + ';background:' + (p === V.currentPage ? '#1e50d0' : '#fff') + ';color:' + (p === V.currentPage ? '#fff' : '#3d4152') + ';border-radius:7px;cursor:pointer;min-width:32px;')
+    }, p)), /*#__PURE__*/React.createElement("button", {
+      onClick: V.onNextPage,
+      disabled: V.currentPage >= V.jumlahHalaman,
+      style: css('padding:6px 11px;font-family:inherit;font-size:12.5px;font-weight:600;border:1.5px solid #e0e0de;background:#fff;color:' + (V.currentPage >= V.jumlahHalaman ? '#c4c8d4' : '#3d4152') + ';border-radius:7px;cursor:' + (V.currentPage >= V.jumlahHalaman ? 'not-allowed' : 'pointer') + ';')
+    }, "›")))), V.isForm && V.form && this.renderForm(V), V.isRiwayat && V.riwayatWarga && /*#__PURE__*/React.createElement("div", {
       style: css('display:flex; flex-direction:column; gap:14px; animation:fadein 0.2s ease;')
     }, /*#__PURE__*/React.createElement("button", {
       onClick: V.onKembali,
@@ -4321,10 +4393,13 @@ Object.assign(Component.prototype, {
       style: css(V.riwayatWarga.desilStyle)
     }, V.riwayatWarga.desilLabel), /*#__PURE__*/React.createElement("span", {
       style: css(V.riwayatWarga.bansosStyle)
-    }, V.riwayatWarga.bansos), V.canCrud && /*#__PURE__*/React.createElement("button", {
+    }, V.riwayatWarga.bansos), V.canCrud && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
       onClick: V.riwayatWarga.onEdit,
       style: css('padding:9px 16px; font-family:inherit; font-size:13px; font-weight:700; border:none; background:#1e50d0; color:#fff; border-radius:8px; cursor:pointer;')
-    }, "Edit Data"))), /*#__PURE__*/React.createElement("div", {
+    }, "Edit Data"), /*#__PURE__*/React.createElement("button", {
+      onClick: V.riwayatWarga.onHapus,
+      style: css('padding:9px 14px; font-family:inherit; font-size:13px; font-weight:700; border:1.5px solid #fca5a5; background:#fef2f2; color:#b91c1c; border-radius:8px; cursor:pointer;')
+    }, "Hapus")))), /*#__PURE__*/React.createElement("div", {
       style: css('display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; align-items:start;')
     }, /*#__PURE__*/React.createElement("div", {
       style: css('background:#fff; border-radius:14px; padding:18px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);')
@@ -4570,7 +4645,14 @@ Object.assign(Component.prototype, {
       }, item.badge));
     })), V.toast && /*#__PURE__*/React.createElement("div", {
       style: css(V.toastStyle)
-    }, V.toast.msg), V.loading && /*#__PURE__*/React.createElement("div", {
+    }, V.toast.msg), V.showScrollTop && /*#__PURE__*/React.createElement("button", {
+      onClick: () => window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      }),
+      title: "Kembali ke atas",
+      style: css('position:fixed;' + (V.isMobile ? 'bottom:70px;' : 'bottom:24px;') + 'right:' + (V.isMobile ? '14px' : '24px') + ';z-index:28;width:38px;height:38px;border-radius:50%;border:none;background:#1e50d0;color:#fff;font-size:16px;cursor:pointer;box-shadow:0 4px 14px rgba(30,80,208,0.35);display:flex;align-items:center;justify-content:center;')
+    }, "↑"), V.loading && /*#__PURE__*/React.createElement("div", {
       style: css('position:fixed;inset:0;z-index:100;background:rgba(15,18,28,0.4);display:flex;align-items:center;justify-content:center;animation:fadein 0.15s ease;')
     }, /*#__PURE__*/React.createElement("div", {
       style: css('background:#fff;border-radius:16px;padding:28px 40px;display:flex;flex-direction:column;align-items:center;gap:16px;box-shadow:0 20px 60px rgba(0,0,0,0.3);')

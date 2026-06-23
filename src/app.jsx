@@ -29,12 +29,17 @@ Object.assign(Component.prototype, {
       return true;
     });
     if(st.sortBy){ const sb=st.sortBy,sd=st.sortDir; list=list.slice().sort((a,b)=>{ let va=a[sb],vb=b[sb]; if(sb==='desil'){va=Number(va);vb=Number(vb);} const c=va<vb?-1:va>vb?1:0; return sd==='asc'?c:-c; }); }
-    const wargaTampil=list.map(w=>{ const ds=this.getDS(w.desil); const bs=this.bansosStyle(w.bansos); const draf=w.status==='draft';
-      return {id:w.id,nama:w.nama,nik:'NIK '+w.nik,dusun:w.dusun,
+    const listAll=list;
+    const pageSize=10; const rawPage=st.page||1;
+    const jumlahHalaman=Math.max(1,Math.ceil(listAll.length/pageSize));
+    const currentPage=Math.min(rawPage,jumlahHalaman);
+    const pageSlice=listAll.slice((currentPage-1)*pageSize, currentPage*pageSize);
+    const wargaTampil=pageSlice.map(w=>{ const ds=this.getDS(w.desil); const bs=this.bansosStyle(w.bansos); const draf=w.status==='draft';
+      return {id:w.id,nama:w.nama,nik:'NIK '+w.nik,dusun:w.dusun,snapCount:w.snapshots.length,
         desilLabel:'Desil '+w.desil, desilBadgeStyle:'display:inline-flex;align-items:center;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;color:'+ds.text+';background:'+ds.bg+';',
         bansos:w.bansos, bansosBadgeStyle:'display:inline-flex;align-items:center;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;color:'+bs.text+';background:'+bs.bg+';',
         isDraf:draf, statusLabel:draf?'Draf':'Final', statusBadgeStyle:'display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;color:'+(draf?'#92400e':'#166534')+';background:'+(draf?'#fef3c7':'#dcfce7')+';border:1px solid '+(draf?'#fde68a':'#bbf7d0')+';',
-        onLihat:()=>this.bukaRiwayat(w.id), onEdit:()=>this.mulaiEdit(w.id), onHover:(e)=>{e.currentTarget.style.background='#f9f9f7';}, onLeave:(e)=>{e.currentTarget.style.background='';}}; });
+        onLihat:()=>this.bukaRiwayat(w.id), onHover:(e)=>{e.currentTarget.style.background='#f9f9f7';}, onLeave:(e)=>{e.currentTarget.style.background='';}}; });
     const desaSet=[]; vWarga.forEach(w=>{ if(w.desa&&desaSet.indexOf(w.desa)<0)desaSet.push(w.desa); }); desaSet.sort();
     const desaOptions=[{value:'semua',label:'Semua Desa'}].concat(desaSet.map(v=>({value:v,label:v})));
     const rtSet=[]; vWarga.forEach(w=>{const v='RT '+w.rt+' / RW '+w.rw; if(rtSet.indexOf(v)<0)rtSet.push(v);}); rtSet.sort();
@@ -70,7 +75,7 @@ Object.assign(Component.prototype, {
     if(rw){ const ds=this.getDS(rw.desil); const bs=this.bansosStyle(rw.bansos);
       riwayatWarga={nama:rw.nama,nik:'NIK '+rw.nik,noKK:'No. KK '+rw.noKK,rtRw:'RT '+rw.rt+' / RW '+rw.rw+' · '+rw.dusun+(rw.desa?' · '+rw.desa:''),
         desilLabel:'Desil '+rw.desil, desilStyle:'display:inline-flex;align-items:center;padding:6px 13px;border-radius:20px;font-size:13px;font-weight:700;color:'+ds.text+';background:'+ds.bg+';',
-        bansosStyle:'display:inline-flex;align-items:center;padding:6px 13px;border-radius:20px;font-size:13px;font-weight:600;color:'+bs.text+';background:'+bs.bg+';', bansos:rw.bansos, onEdit:()=>this.mulaiEdit(rw.id)};
+        bansosStyle:'display:inline-flex;align-items:center;padding:6px 13px;border-radius:20px;font-size:13px;font-weight:600;color:'+bs.text+';background:'+bs.bg+';', bansos:rw.bansos, onEdit:()=>this.mulaiEdit(rw.id), onHapus:()=>this.hapusWarga(rw.id)};
       const earliest=rw.snapshots.slice().sort((a,b)=>a.tanggal<b.tanggal?-1:1)[0].tanggal;
       const sorted=rw.snapshots.slice().sort((a,b)=>a.tanggal<b.tanggal?1:-1);
       snapshotList=sorted.map(sn=>{ const active=sn.tanggal===st.selectedTanggal; const ds2=this.getDS(sn.data.desil); const np=sn.fieldYangBerubah.length; const awal=sn.tanggal===earliest;
@@ -111,7 +116,7 @@ Object.assign(Component.prototype, {
       search:st.search, filterDesa:st.filterDesa, filterRt:st.filterRt, filterDesil:st.filterDesil, filterBansos:st.filterBansos, filterSanggahan:st.filterSanggahan,
       onSearch:(e)=>this.onSearch(e), onFilter:(e)=>this.onFilter(e), onTambah:()=>this.onTambah(),
       desaOptions:desaOptions, rtOptions:rtOptions, desilFilterOpts:desilFilterOpts, bansosFilterOpts:bansosFilterOpts, sgFilterOpts:sgFilterOpts,
-      wargaTampil:wargaTampil, kosong:wargaTampil.length===0, jumlahTampil:wargaTampil.length, jumlahTotal:vWarga.length,
+      wargaTampil:wargaTampil, kosong:wargaTampil.length===0, jumlahTampil:listAll.length,
       statTotal:statTotal, statPrioritas:statPrioritas, statBansos:statBansos, statPerubahan:perubahanList.length, statSanggahan:sanggahanPending,
       desilBars:desilBars, perubahanList:perubahanList, tidakAdaPerubahan:perubahanList.length===0,
       form:form,
@@ -119,6 +124,11 @@ Object.assign(Component.prototype, {
       validasi:validasi, canFinalize:canFinalize,
       onSimpanDraf:()=>this.konfirmasiSimpan('draft'), onFinalisasi:()=>this.konfirmasiSimpan('final'), onBatal:()=>this.onBatal(), onKeluarTanpaSimpan:()=>this.keluarTanpaSimpan(),
       onSort:(col)=>this.onSort(col), sortBy:st.sortBy, sortDir:st.sortDir, loading:st.loading, isMobile:st.isMobile,
+      jumlahHalaman:jumlahHalaman, currentPage:currentPage, jumlahTotal:listAll.length,
+      onPrevPage:()=>this.setState(s=>({page:Math.max(1,(s.page||1)-1)})),
+      onNextPage:()=>this.setState(s=>({page:Math.min(jumlahHalaman,(s.page||1)+1)})),
+      onGoPage:(p)=>this.setState({page:p}),
+      showScrollTop:st.showScrollTop,
       riwayatWarga:riwayatWarga, snapshotList:snapshotList,
       selectedSnap:selectedSnap||{tanggalStr:'',operator:'',adaPerubahan:false,snapAwal:false,jumlahPerubahan:'',diffList:[],dataRows:[],snapFoto:[],jumlahSanggahan:''},
       sanggahanForSnap:sanggahanForSnap, showSanggahanForm:st.showSanggahanForm, sanggahanForm:st.sanggahanForm, canAjukanSanggahan:canAjukanSanggahan,
@@ -704,7 +714,7 @@ Object.assign(Component.prototype, {
                         <Th col="dusun" label="Banjar" />
                         <Th col="desil" label="Desil" />
                         <Th col="bansos" label="Bansos" />
-                        <th style={css('text-align:right; padding:12px 16px; font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.06em;')}>Aksi</th>
+                        <th style={css('padding:12px 16px; font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.06em;')}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -712,7 +722,7 @@ Object.assign(Component.prototype, {
                         <tr key={w.id} style={css('border-top:1px solid #f0f0ee;transition:background 0.12s;')} onMouseEnter={w.onHover} onMouseLeave={w.onLeave}>
                           <td style={css('padding:12px 16px; vertical-align:middle;')}>
                             <div style={css('display:flex; align-items:center; gap:7px;')}><span style={css('font-size:13.5px; font-weight:700; color:#18191f;')}>{w.nama}</span><span style={css(w.statusBadgeStyle)}>{w.statusLabel}</span></div>
-                            <div style={css('font-size:11px; color:#9ba2b6; margin-top:2px; font-variant-numeric:tabular-nums;')}>{w.nik}</div>
+                            <div style={css('font-size:11px; color:#9ba2b6; margin-top:2px; font-variant-numeric:tabular-nums;')}>{w.nik}<span style={css('margin-left:8px;color:#d4d4d0;')}>· {w.snapCount} snp</span></div>
                           </td>
                           <td style={css('padding:12px 16px; vertical-align:middle;')}>
                             <div style={css('font-size:13px; font-weight:600; color:#3d4152;')}>{w.dusun.replace('Banjar Dinas ','')}</div>
@@ -720,12 +730,7 @@ Object.assign(Component.prototype, {
                           <td style={css('padding:12px 16px; vertical-align:middle;')}><span style={css(w.desilBadgeStyle)}>{w.desilLabel}</span></td>
                           <td style={css('padding:12px 16px; vertical-align:middle;')}><span style={css(w.bansosBadgeStyle)}>{w.bansos}</span></td>
                           <td style={css('padding:12px 16px; vertical-align:middle; text-align:right;')}>
-                            <div style={css('display:inline-flex; gap:5px;')}>
-                              <button onClick={w.onLihat} title="Lihat Riwayat" style={css('width:32px;height:32px;border:1.5px solid #e0e0de;background:#fff;color:#3d4152;border-radius:8px;cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;')}>⊚</button>
-                              {V.canCrud && (
-                                <button onClick={w.onEdit} title="Edit Data" style={css('width:32px;height:32px;border:none;background:#1e50d0;color:#fff;border-radius:8px;cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;')}>✎</button>
-                              )}
-                            </div>
+                            <button onClick={w.onLihat} title="Lihat Detail & Riwayat" style={css('padding:6px 13px;border:1.5px solid #e0e0de;background:#fff;color:#3d4152;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;font-family:inherit;white-space:nowrap;')}>Lihat →</button>
                           </td>
                         </tr>
                       ))}
@@ -737,7 +742,18 @@ Object.assign(Component.prototype, {
                 </div>
                 );
               })()}
-              <span style={css('font-size:12px; color:#9ba2b6;')}>Menampilkan {V.jumlahTampil} dari {V.jumlahTotal} rumah tangga</span>
+              <div style={css('display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;')}>
+                <span style={css('font-size:12px; color:#9ba2b6;')}>{V.jumlahTampil} rumah tangga · Hal. {V.currentPage} dari {V.jumlahHalaman}</span>
+                {V.jumlahHalaman>1&&(
+                  <div style={css('display:flex;gap:4px;align-items:center;')}>
+                    <button onClick={V.onPrevPage} disabled={V.currentPage<=1} style={css('padding:6px 11px;font-family:inherit;font-size:12.5px;font-weight:600;border:1.5px solid #e0e0de;background:#fff;color:'+(V.currentPage<=1?'#c4c8d4':'#3d4152')+';border-radius:7px;cursor:'+(V.currentPage<=1?'not-allowed':'pointer')+';')}>‹</button>
+                    {Array.from({length:V.jumlahHalaman},(_, i)=>i+1).map(p=>(
+                      <button key={p} onClick={()=>V.onGoPage(p)} style={css('padding:6px 10px;font-family:inherit;font-size:12.5px;font-weight:'+(p===V.currentPage?'700':'500')+';border:1.5px solid '+(p===V.currentPage?'#1e50d0':'#e0e0de')+';background:'+(p===V.currentPage?'#1e50d0':'#fff')+';color:'+(p===V.currentPage?'#fff':'#3d4152')+';border-radius:7px;cursor:pointer;min-width:32px;')}>{p}</button>
+                    ))}
+                    <button onClick={V.onNextPage} disabled={V.currentPage>=V.jumlahHalaman} style={css('padding:6px 11px;font-family:inherit;font-size:12.5px;font-weight:600;border:1.5px solid #e0e0de;background:#fff;color:'+(V.currentPage>=V.jumlahHalaman?'#c4c8d4':'#3d4152')+';border-radius:7px;cursor:'+(V.currentPage>=V.jumlahHalaman?'not-allowed':'pointer')+';')}>›</button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -759,7 +775,10 @@ Object.assign(Component.prototype, {
                   <span style={css(V.riwayatWarga.desilStyle)}>{V.riwayatWarga.desilLabel}</span>
                   <span style={css(V.riwayatWarga.bansosStyle)}>{V.riwayatWarga.bansos}</span>
                   {V.canCrud && (
-                    <button onClick={V.riwayatWarga.onEdit} style={css('padding:9px 16px; font-family:inherit; font-size:13px; font-weight:700; border:none; background:#1e50d0; color:#fff; border-radius:8px; cursor:pointer;')}>Edit Data</button>
+                    <React.Fragment>
+                      <button onClick={V.riwayatWarga.onEdit} style={css('padding:9px 16px; font-family:inherit; font-size:13px; font-weight:700; border:none; background:#1e50d0; color:#fff; border-radius:8px; cursor:pointer;')}>Edit Data</button>
+                      <button onClick={V.riwayatWarga.onHapus} style={css('padding:9px 14px; font-family:inherit; font-size:13px; font-weight:700; border:1.5px solid #fca5a5; background:#fef2f2; color:#b91c1c; border-radius:8px; cursor:pointer;')}>Hapus</button>
+                    </React.Fragment>
                   )}
                 </div>
               </div>
@@ -971,6 +990,9 @@ Object.assign(Component.prototype, {
         )}
         {V.toast && (
           <div style={css(V.toastStyle)}>{V.toast.msg}</div>
+        )}
+        {V.showScrollTop && (
+          <button onClick={()=>window.scrollTo({top:0,behavior:'smooth'})} title="Kembali ke atas" style={css('position:fixed;'+(V.isMobile?'bottom:70px;':'bottom:24px;')+'right:'+(V.isMobile?'14px':'24px')+';z-index:28;width:38px;height:38px;border-radius:50%;border:none;background:#1e50d0;color:#fff;font-size:16px;cursor:pointer;box-shadow:0 4px 14px rgba(30,80,208,0.35);display:flex;align-items:center;justify-content:center;')}>↑</button>
         )}
         {V.loading && (
           <div style={css('position:fixed;inset:0;z-index:100;background:rgba(15,18,28,0.4);display:flex;align-items:center;justify-content:center;animation:fadein 0.15s ease;')}>

@@ -26,9 +26,10 @@ test('Operator dashboard shows all 18 households', () => {
 test('Operator daftar view exposes CRUD controls and all desa', () => {
   const txt = render({ auth: { role: 'Operator', nama: 'Komang Sutarja', wilayah: null }, view: 'daftar' });
   assert.match(txt, /\+ Tambah Data/);
-  assert.match(txt, /I Wayan Sukra/);  // Desa Sambirenteng
-  assert.match(txt, /I Gede Mangku/);  // Desa Tembok
-  assert.match(txt, /Desa Penuktukan/); // desa shown / filterable
+  assert.match(txt, /I Wayan Sukra/);  // Desa Sambirenteng — on page 1
+  // All 3 desa appear in the filter dropdown (pagination hides page-2 rows)
+  assert.match(txt, /Desa Tembok/);     // filterable
+  assert.match(txt, /Desa Penuktukan/); // filterable
 });
 
 test('Kepala SLS is read-only and scoped to its banjar', () => {

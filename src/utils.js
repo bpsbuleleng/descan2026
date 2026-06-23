@@ -26,6 +26,9 @@ function css(str){
 // "anggota.2.disabilitas.fisik", "meteran.0.idPelanggan"). Immutable setPath
 // clones along the path so React state updates stay pure.
 // ---------------------------------------------------------------------------
+// Tanggal lokal WITA (UTC+8) dalam format YYYY-MM-DD.
+function todayWITA(){ var d=new Date(); return new Date(d.getTime()+8*3600000).toISOString().slice(0,10); }
+
 function getPath(obj,path){ var p=String(path).split('.'),c=obj; for(var i=0;i<p.length;i++){ if(c==null) return undefined; c=c[p[i]]; } return c; }
 function setPath(obj,path,val){
   var p=String(path).split('.');
