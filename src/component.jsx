@@ -103,6 +103,7 @@ class Component extends React.Component {
       showSanggahanForm:false, sanggahanForm:{pengaju:'',nik:'',hubungan:'Warga Bersangkutan',alasan:''},
       processingId:null, processCatatan:'',
       confirmModal:null, loading:false, sortBy:null, sortDir:'asc',
+      isMobile:typeof window!=='undefined'&&window.innerWidth<768,
       toast:null, today:new Date().toISOString().slice(0,10)};
   }
 
@@ -123,6 +124,11 @@ class Component extends React.Component {
     this.setState({warga:this.seedWarga(),sanggahan:this.seedSanggahan(),view:'dashboard',selectedId:null,selectedTanggal:null,form:null,editId:null,toast:{type:'ok',msg:'Data contoh dipulihkan.'}});
     this.autoClear();
   }
+  componentDidMount(){
+    this._onResize=()=>this.setState({isMobile:window.innerWidth<768});
+    window.addEventListener('resize',this._onResize);
+  }
+  componentWillUnmount(){ window.removeEventListener('resize',this._onResize); }
   componentDidUpdate(_prevProps, prevState){
     if(prevState.warga!==this.state.warga || prevState.sanggahan!==this.state.sanggahan){
       this.saveStore(this.state);

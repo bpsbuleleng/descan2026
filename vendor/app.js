@@ -667,6 +667,7 @@ class Component extends React.Component {
       loading: false,
       sortBy: null,
       sortDir: 'asc',
+      isMobile: typeof window !== 'undefined' && window.innerWidth < 768,
       toast: null,
       today: new Date().toISOString().slice(0, 10)
     };
@@ -738,6 +739,15 @@ class Component extends React.Component {
       }
     });
     this.autoClear();
+  }
+  componentDidMount() {
+    this._onResize = () => this.setState({
+      isMobile: window.innerWidth < 768
+    });
+    window.addEventListener('resize', this._onResize);
+  }
+  componentWillUnmount() {
+    window.removeEventListener('resize', this._onResize);
   }
   componentDidUpdate(_prevProps, prevState) {
     if (prevState.warga !== this.state.warga || prevState.sanggahan !== this.state.sanggahan) {
@@ -2731,6 +2741,7 @@ Object.assign(Component.prototype, {
       return {
         label: label,
         badge: badge || 0,
+        active: active,
         onClick: () => this.nav(key),
         style: 'width:100%;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border:none;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13.5px;font-weight:' + (active ? '700' : '500') + ';color:' + (active ? '#fff' : '#3d4152') + ';background:' + (active ? '#1e50d0' : 'transparent') + ';transition:background 0.15s,color 0.15s;'
       };
@@ -3053,7 +3064,7 @@ Object.assign(Component.prototype, {
     let toastStyle = '';
     if (st.toast) {
       const ok = st.toast.type !== 'err';
-      toastStyle = 'position:fixed;right:20px;bottom:20px;z-index:60;padding:13px 18px;border-radius:12px;font-size:13px;font-weight:600;color:#fff;max-width:380px;box-shadow:0 8px 24px rgba(0,0,0,0.2);animation:tslide 0.25s ease;background:' + (ok ? '#16a34a' : '#dc2626') + ';';
+      toastStyle = 'position:fixed;right:' + (st.isMobile ? '12px' : '20px') + ';bottom:' + (st.isMobile ? '70px' : '20px') + ';z-index:60;padding:13px 18px;border-radius:12px;font-size:13px;font-weight:600;color:#fff;max-width:' + (st.isMobile ? 'calc(100vw - 24px)' : '380px') + ';box-shadow:0 8px 24px rgba(0,0,0,0.2);animation:tslide 0.25s ease;background:' + (ok ? '#16a34a' : '#dc2626') + ';';
     }
     return {
       auth: auth,
@@ -3112,6 +3123,7 @@ Object.assign(Component.prototype, {
       sortBy: st.sortBy,
       sortDir: st.sortDir,
       loading: st.loading,
+      isMobile: st.isMobile,
       riwayatWarga: riwayatWarga,
       snapshotList: snapshotList,
       selectedSnap: selectedSnap || {
@@ -3279,12 +3291,13 @@ Object.assign(Component.prototype, {
         style: css('border:none;background:#f7f7f5;cursor:pointer;padding:0 10px;font-size:9px;color:#52576b;flex:1;')
       }, "▼")));
     }
+    const mob = this.state.isMobile;
     return /*#__PURE__*/React.createElement("div", {
       key: o.p,
       id: 'f_' + o.p,
-      style: css('display:grid;grid-template-columns:minmax(150px,38%) 1fr;gap:18px;align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;animation:fadein 0.18s ease;')
+      style: css('display:' + (mob ? 'flex' : 'grid') + ';' + (mob ? 'flex-direction:column;gap:8px;' : 'grid-template-columns:minmax(150px,38%) 1fr;gap:18px;') + 'align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;animation:fadein 0.18s ease;')
     }, /*#__PURE__*/React.createElement("div", {
-      style: css('font-size:13px;font-weight:600;color:#2c3442;line-height:1.5;padding-top:7px;')
+      style: css('font-size:13px;font-weight:600;color:#2c3442;line-height:1.5;' + (mob ? '' : 'padding-top:7px;'))
     }, /*#__PURE__*/React.createElement("span", {
       style: css('color:#b0b5c2;font-weight:700;margin-right:6px;')
     }, o.r, "."), o.label, o.req ? /*#__PURE__*/React.createElement("span", {
@@ -3317,6 +3330,7 @@ Object.assign(Component.prototype, {
   renderForm(V) {
     const k = V.form,
       val = V.validasi;
+    const mob = this.state.isMobile;
     const ab = k._activeBlok || 'I';
     const prog = this.formProgress(k);
     const gB = {};
@@ -3432,13 +3446,13 @@ Object.assign(Component.prototype, {
       return /*#__PURE__*/React.createElement("div", {
         style: css('animation:fadein 0.2s ease;')
       }, sub('Identitas Wilayah & Keluarga'), F.map(d => fld(d)), /*#__PURE__*/React.createElement("div", {
-        style: css('display:grid;grid-template-columns:minmax(150px,38%) 1fr;gap:18px;align-items:start;padding:13px 0;')
+        style: css('display:' + (mob ? 'flex' : 'grid') + ';' + (mob ? 'flex-direction:column;gap:8px;' : 'grid-template-columns:minmax(150px,38%) 1fr;gap:18px;') + 'align-items:start;padding:13px 0;')
       }, /*#__PURE__*/React.createElement("div", {
-        style: css('font-size:13px;font-weight:600;color:#2c3442;padding-top:7px;')
+        style: css('font-size:13px;font-weight:600;color:#2c3442;' + (mob ? '' : 'padding-top:7px;'))
       }, /*#__PURE__*/React.createElement("span", {
         style: css('color:#b0b5c2;font-weight:700;margin-right:6px;')
       }, "3l."), "Geotagging lokasi (Lat / Long / Akurasi)"), /*#__PURE__*/React.createElement("div", {
-        style: css('display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;')
+        style: css('display:grid;grid-template-columns:' + (mob ? '1fr 1fr' : '1fr 1fr 1fr') + ';gap:8px;')
       }, /*#__PURE__*/React.createElement("input", {
         value: getPath(k, 'geotag.lat') || '',
         onChange: e => this.setForm('geotag.lat', e.target.value),
@@ -3621,9 +3635,9 @@ Object.assign(Component.prototype, {
             const err = errMap[base + d.rp];
             return /*#__PURE__*/React.createElement("div", {
               key: d.rp,
-              style: css('display:grid;grid-template-columns:minmax(150px,38%) 1fr;gap:18px;align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;')
+              style: css('display:' + (mob ? 'flex' : 'grid') + ';' + (mob ? 'flex-direction:column;gap:8px;' : 'grid-template-columns:minmax(150px,38%) 1fr;gap:18px;') + 'align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;')
             }, /*#__PURE__*/React.createElement("div", {
-              style: css('font-size:13px;font-weight:600;color:#2c3442;padding-top:7px;')
+              style: css('font-size:13px;font-weight:600;color:#2c3442;' + (mob ? '' : 'padding-top:7px;'))
             }, /*#__PURE__*/React.createElement("span", {
               style: css('color:#b0b5c2;font-weight:700;margin-right:6px;')
             }, d.r, "."), d.label, d.req ? /*#__PURE__*/React.createElement("span", {
@@ -3649,15 +3663,15 @@ Object.assign(Component.prototype, {
             error: errMap[base + d.rp]
           });
         }), /*#__PURE__*/React.createElement("div", {
-          style: css('display:grid;grid-template-columns:minmax(150px,38%) 1fr;gap:18px;align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;')
+          style: css('display:' + (mob ? 'flex' : 'grid') + ';' + (mob ? 'flex-direction:column;gap:8px;' : 'grid-template-columns:minmax(150px,38%) 1fr;gap:18px;') + 'align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;')
         }, /*#__PURE__*/React.createElement("div", {
-          style: css('font-size:13px;font-weight:600;color:#2c3442;padding-top:7px;')
+          style: css('font-size:13px;font-weight:600;color:#2c3442;' + (mob ? '' : 'padding-top:7px;'))
         }, /*#__PURE__*/React.createElement("span", {
           style: css('color:#b0b5c2;font-weight:700;margin-right:6px;')
         }, "30."), "Tanggal Lahir", /*#__PURE__*/React.createElement("span", {
           style: css('color:' + ORANGE + ';')
         }, " *")), /*#__PURE__*/React.createElement("div", {
-          style: css('display:grid;grid-template-columns:1fr 1.4fr 1fr 1fr;gap:8px;')
+          style: css('display:grid;grid-template-columns:' + (mob ? '1fr 1fr' : '1fr 1.4fr 1fr 1fr') + ';gap:8px;')
         }, /*#__PURE__*/React.createElement("input", {
           value: a.tglLahir || '',
           onChange: e => this.setForm(base + 'tglLahir', e.target.value.replace(/[^0-9]/g, '')),
@@ -3806,12 +3820,27 @@ Object.assign(Component.prototype, {
     }, n), /*#__PURE__*/React.createElement("span", {
       style: css('font-size:11px;font-weight:700;color:' + color + ';text-transform:uppercase;letter-spacing:0.04em;')
     }, label));
-    return /*#__PURE__*/React.createElement("div", {
-      style: css('animation:fadein 0.2s ease;display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap;')
-    }, sidebar, /*#__PURE__*/React.createElement("section", {
-      style: css('flex:1;min-width:300px;display:flex;flex-direction:column;gap:14px;')
+    const mobileBlokTabs = /*#__PURE__*/React.createElement("div", {
+      style: css('overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:2px;')
     }, /*#__PURE__*/React.createElement("div", {
-      style: css('background:#fff;border-radius:14px;padding:22px 22px 8px;box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);')
+      style: css('display:flex;gap:5px;padding-bottom:4px;')
+    }, NB.map(([romawi, lbl]) => {
+      const on = ab === romawi;
+      const errs = gB[romawi] || 0;
+      return /*#__PURE__*/React.createElement("button", {
+        key: romawi,
+        onClick: () => this.goBlok(romawi),
+        style: css('flex:none;padding:7px 13px;border:none;border-radius:20px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:' + (on ? '700' : '600') + ';color:' + (on ? '#fff' : '#3d4152') + ';background:' + (on ? ORANGE : '#f0f0ee') + ';white-space:nowrap;display:inline-flex;align-items:center;gap:5px;')
+      }, "Blok ", romawi, errs > 0 && !on && /*#__PURE__*/React.createElement("span", {
+        style: css('min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#b91c1c;color:#fff;font-size:10px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;')
+      }, errs));
+    })));
+    return /*#__PURE__*/React.createElement("div", {
+      style: css('animation:fadein 0.2s ease;display:flex;' + (mob ? 'flex-direction:column;' : 'gap:18px;align-items:flex-start;flex-wrap:wrap;'))
+    }, !mob && sidebar, /*#__PURE__*/React.createElement("section", {
+      style: css('flex:1;' + (mob ? '' : 'min-width:300px;') + 'display:flex;flex-direction:column;gap:14px;')
+    }, mob && mobileBlokTabs, /*#__PURE__*/React.createElement("div", {
+      style: css('background:#fff;border-radius:14px;padding:' + (mob ? '14px 14px 8px' : '22px 22px 8px') + ';box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);')
     }, /*#__PURE__*/React.createElement("div", {
       style: css('text-align:center;margin-bottom:16px;')
     }, /*#__PURE__*/React.createElement("div", {
@@ -4009,34 +4038,36 @@ Object.assign(Component.prototype, {
     return /*#__PURE__*/React.createElement("div", {
       style: css("min-height:100vh; display:flex; flex-direction:column; background:#f5f5f2; font-family:'Plus Jakarta Sans',system-ui,sans-serif; color:#18191f;")
     }, /*#__PURE__*/React.createElement("header", {
-      style: css('position:sticky; top:0; z-index:30; background:#fff; border-bottom:1px solid #e8e8e6; height:58px; display:flex; align-items:center; justify-content:space-between; padding:0 20px; gap:14px;')
+      style: css('position:sticky; top:0; z-index:30; background:#fff; border-bottom:1px solid #e8e8e6; height:58px; display:flex; align-items:center; justify-content:space-between; padding:0 ' + (V.isMobile ? '12px' : '20px') + '; gap:14px; overflow:hidden;')
     }, /*#__PURE__*/React.createElement("div", {
-      style: css('display:flex; align-items:center; gap:11px; flex:none;')
+      style: css('display:flex; align-items:center; gap:11px; flex:none; min-width:0;')
     }, /*#__PURE__*/React.createElement("div", {
       style: css('width:34px; height:34px; border-radius:9px; background:#1e50d0; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800; color:#fff; letter-spacing:-0.03em; flex:none;')
-    }, "DT"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    }, "DT"), !V.isMobile && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
       style: css('font-size:15px; font-weight:800; color:#18191f; letter-spacing:-0.02em; line-height:1.2;')
     }, "DTSEN Desa"), /*#__PURE__*/React.createElement("div", {
       style: css('font-size:11px; color:#9ba2b6; font-weight:500; line-height:1.2;')
-    }, V.namaDesa))), /*#__PURE__*/React.createElement("div", {
-      style: css('display:flex; align-items:center; gap:10px; flex:none;')
-    }, /*#__PURE__*/React.createElement("span", {
+    }, V.namaDesa)), V.isMobile && /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:14px; font-weight:800; color:#18191f; white-space:nowrap;')
+    }, "DTSEN Desa")), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; align-items:center; gap:' + (V.isMobile ? '8px' : '10px') + '; flex:none;')
+    }, !V.isMobile && /*#__PURE__*/React.createElement("span", {
       title: V.serverMode ? 'Tersambung ke Google Sheets' : 'Data tersimpan di perangkat ini',
       style: css('font-size:11px; font-weight:700; padding:5px 10px; border-radius:20px; white-space:nowrap; border:1px solid ' + (V.serverMode ? '#bbf7d0' : '#e0e0de') + '; color:' + (V.serverMode ? '#166534' : '#6b7280') + '; background:' + (V.serverMode ? '#f0fdf4' : '#f6f6f5') + ';')
-    }, V.serverMode ? '● Sheets' : '○ Lokal'), !V.canCrud && /*#__PURE__*/React.createElement("span", {
+    }, V.serverMode ? '● Sheets' : '○ Lokal'), !V.canCrud && !V.isMobile && /*#__PURE__*/React.createElement("span", {
       style: css('font-size:11px; font-weight:700; color:#52576b; background:#f0f0ef; border:1px solid #e0e0de; padding:5px 10px; border-radius:20px; white-space:nowrap;')
-    }, "Hanya-Lihat"), V.canCrud && /*#__PURE__*/React.createElement("button", {
+    }, "Hanya-Lihat"), V.canCrud && !V.isMobile && /*#__PURE__*/React.createElement("button", {
       onClick: () => {
         if (window.confirm('Pulihkan data contoh? Semua perubahan tersimpan akan dihapus.')) this.resetStore();
       },
       title: "Pulihkan data contoh dan hapus data tersimpan",
       style: css('font-size:12px; font-weight:600; color:#52576b; background:#f3f3f2; border:1px solid #e8e8e6; padding:5px 11px; border-radius:7px; cursor:pointer; white-space:nowrap;')
     }, "Reset data"), /*#__PURE__*/React.createElement("div", {
-      style: css('display:flex; align-items:center; gap:8px; padding-left:10px; border-left:1px solid #e8e8e6;')
+      style: css('display:flex; align-items:center; gap:8px; ' + (V.isMobile ? '' : 'padding-left:10px; border-left:1px solid #e8e8e6;'))
     }, /*#__PURE__*/React.createElement("div", {
       style: css('width:32px; height:32px; border-radius:50%; background:#eef2fc; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#1e50d0; flex:none;'),
       title: V.namaOperator
-    }, V.opInitials), /*#__PURE__*/React.createElement("div", {
+    }, V.opInitials), !V.isMobile && /*#__PURE__*/React.createElement("div", {
       style: css('display:flex; flex-direction:column; line-height:1.25;')
     }, /*#__PURE__*/React.createElement("span", {
       style: css('font-size:12.5px; font-weight:700; color:#18191f; white-space:nowrap;')
@@ -4045,10 +4076,10 @@ Object.assign(Component.prototype, {
     }, V.roleLabel, V.wilayahLabel ? ' · ' + V.wilayahLabel : ''))), /*#__PURE__*/React.createElement("button", {
       onClick: () => this.logout(),
       title: "Keluar",
-      style: css('font-size:12px; font-weight:600; color:#b91c1c; background:#fff; border:1px solid #f0c9c9; padding:6px 11px; border-radius:7px; cursor:pointer; white-space:nowrap;')
+      style: css('font-size:12px; font-weight:600; color:#b91c1c; background:#fff; border:1px solid #f0c9c9; padding:6px ' + (V.isMobile ? '10px' : '11px') + '; border-radius:7px; cursor:pointer; white-space:nowrap;')
     }, "Keluar"))), /*#__PURE__*/React.createElement("div", {
-      style: css('flex:1; display:flex; overflow:hidden;')
-    }, !V.isForm && /*#__PURE__*/React.createElement("aside", {
+      style: css('flex:1; display:flex; overflow:' + (V.isMobile ? 'visible' : 'hidden') + ';')
+    }, !V.isForm && !V.isMobile && /*#__PURE__*/React.createElement("aside", {
       style: css('width:220px; flex:none; position:sticky; top:58px; align-self:flex-start; max-height:calc(100vh - 58px); overflow-y:auto; background:#fff; border-right:1px solid #e8e8e6; padding:14px 12px; display:flex; flex-direction:column; gap:6px;')
     }, /*#__PURE__*/React.createElement("div", {
       style: css('padding:4px 4px 14px; border-bottom:1px solid #f0f0ee; margin-bottom:4px;')
@@ -4063,7 +4094,7 @@ Object.assign(Component.prototype, {
     }, /*#__PURE__*/React.createElement("span", null, item.label), item.badge > 0 && /*#__PURE__*/React.createElement("span", {
       style: css('background:#dc2626;color:#fff;border-radius:8px;padding:1px 7px;font-size:10px;font-weight:800;min-width:18px;text-align:center;')
     }, item.badge)))), /*#__PURE__*/React.createElement("main", {
-      style: css('flex:1; min-width:0; padding:24px 20px; max-width:1200px; margin:0 auto; overflow-x:hidden;')
+      style: css('flex:1; min-width:0; padding:' + (V.isMobile ? '12px' : '24px 20px') + '; max-width:1200px; margin:0 auto; overflow-x:hidden;' + (V.isMobile && !V.isForm ? ' padding-bottom:70px;' : ''))
     }, V.isDashboard && /*#__PURE__*/React.createElement("div", {
       style: css('display:flex; flex-direction:column; gap:20px; animation:fadein 0.2s ease;')
     }, /*#__PURE__*/React.createElement("div", {
@@ -4522,7 +4553,22 @@ Object.assign(Component.prototype, {
       style: css('padding:8px 16px; font-family:inherit; font-size:12.5px; font-weight:700; border:none; background:#1e50d0; color:#fff; border-radius:8px; cursor:pointer;')
     }, "Proses & Beri Keputusan")))), V.sgKosong && /*#__PURE__*/React.createElement("div", {
       style: css('background:#fff; border-radius:14px; padding:48px; text-align:center; color:#9ba2b6; font-size:13.5px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);')
-    }, "Tidak ada sanggahan yang cocok dengan filter.")))), V.toast && /*#__PURE__*/React.createElement("div", {
+    }, "Tidak ada sanggahan yang cocok dengan filter.")))), !V.isForm && V.isMobile && /*#__PURE__*/React.createElement("nav", {
+      style: css('position:fixed;bottom:0;left:0;right:0;z-index:29;background:#fff;border-top:1px solid #e8e8e6;display:flex;height:58px;')
+    }, V.navItems.map((item, i) => {
+      const icons = ['⊞', '≡', '⚑'];
+      return /*#__PURE__*/React.createElement("button", {
+        key: i,
+        onClick: item.onClick,
+        style: css('flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:none;background:none;cursor:pointer;font-family:inherit;padding:0;position:relative;border-top:2px solid ' + (item.active ? '#1e50d0' : 'transparent') + ';')
+      }, /*#__PURE__*/React.createElement("span", {
+        style: css('font-size:18px;color:' + (item.active ? '#1e50d0' : '#9ba2b6') + ';line-height:1;')
+      }, icons[i]), /*#__PURE__*/React.createElement("span", {
+        style: css('font-size:10px;font-weight:' + (item.active ? '700' : '500') + ';color:' + (item.active ? '#1e50d0' : '#9ba2b6') + ';white-space:nowrap;')
+      }, item.label === 'Daftar Warga' ? 'Warga' : item.label === 'Sanggahan' ? 'Sanggah' : item.label), item.badge > 0 && /*#__PURE__*/React.createElement("span", {
+        style: css('position:absolute;top:6px;right:calc(50% - 18px);min-width:14px;height:14px;padding:0 3px;border-radius:7px;background:#dc2626;color:#fff;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;')
+      }, item.badge));
+    })), V.toast && /*#__PURE__*/React.createElement("div", {
       style: css(V.toastStyle)
     }, V.toast.msg), V.loading && /*#__PURE__*/React.createElement("div", {
       style: css('position:fixed;inset:0;z-index:100;background:rgba(15,18,28,0.4);display:flex;align-items:center;justify-content:center;animation:fadein 0.15s ease;')
