@@ -1,19 +1,33 @@
-// Build step: compile src/app.jsx (JSX) -> vendor/app.js (plain JS, classic
-// runtime so it runs as a normal <script> with the React UMD globals, no Babel
-// needed in the browser). Run: node build.js
-const fs = require('fs');
+// Build step: concatenate src/*.js/*.jsx in dependency order, compile JSX → plain JS.
+// The result is a single vendor/app.js loaded as a classic <script> (React UMD globals).
+// Run: node build.js
+const fs   = require('fs');
 const path = require('path');
 const babel = require('@babel/standalone');
 
-const srcPath = path.join(__dirname, 'src', 'app.jsx');
+// Source files in strict dependency order.
+const SRC_FILES = [
+  'src/utils.js',           // css(), getPath(), setPath()
+  'src/schema.js',          // KODE, BLOK2, ANGGOTA_FIELDS, etc.
+  'src/component.jsx',      // class Component (constructor + core methods)
+  'src/component-data.jsx', // Object.assign: data / factory methods
+  'src/component-handlers.jsx', // Object.assign: event handler methods
+  'src/app.jsx',            // Object.assign: render methods + ReactDOM.render
+];
+
+const srcDir = __dirname;
 const outPath = path.join(__dirname, 'vendor', 'app.js');
 
-const src = fs.readFileSync(srcPath, 'utf8');
-const { code } = babel.transform(src, {
+const combined = SRC_FILES
+  .map(f => fs.readFileSync(path.join(srcDir, f), 'utf8'))
+  .join('\n');
+
+const { code } = babel.transform(combined, {
   presets: [['react', { runtime: 'classic' }]],
-  compact: false
+  compact: false,
 });
 
-const banner = '/* AUTO-GENERATED from src/app.jsx by build.js — do not edit directly. */\n';
+const banner = '/* AUTO-GENERATED from src/* by build.js — do not edit directly. */\n';
 fs.writeFileSync(outPath, banner + code, 'utf8');
 console.log('Built vendor/app.js (' + (banner.length + code.length) + ' bytes)');
+console.log('Sources:', SRC_FILES.join(', '));

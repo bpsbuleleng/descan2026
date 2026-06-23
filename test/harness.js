@@ -10,8 +10,21 @@ const vm = require('vm');
 const babel = require('@babel/standalone');
 
 const ROOT = path.join(__dirname, '..');
-const SRC = path.join(ROOT, 'src', 'app.jsx');
-const BANNER = '/* AUTO-GENERATED from src/app.jsx by build.js — do not edit directly. */\n';
+const BANNER = '/* AUTO-GENERATED from src/* by build.js — do not edit directly. */\n';
+
+// Source files in dependency order — must match build.js SRC_FILES.
+const SRC_FILES = [
+  'src/utils.js',
+  'src/schema.js',
+  'src/component.jsx',
+  'src/component-data.jsx',
+  'src/component-handlers.jsx',
+  'src/app.jsx',
+];
+
+function loadSrc() {
+  return SRC_FILES.map(f => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n');
+}
 
 // Compile JSX -> JS exactly like build.js (classic runtime, not compact).
 function compile(src) {
@@ -54,7 +67,7 @@ function makeReact() {
 // opts.apiUrl + opts.fetch enable "server mode" (Google Sheets) for tests.
 function loadApp(opts) {
   opts = opts || {};
-  const src = fs.readFileSync(SRC, 'utf8');
+  const src = loadSrc();
   let code;
   try {
     code = compile(src);
@@ -99,4 +112,4 @@ function treeText(node) {
   try { return JSON.stringify(node); } catch (e) { return ''; }
 }
 
-module.exports = { loadApp, makeInstance, compile, treeText, flush, BANNER, SRC, ROOT };
+module.exports = { loadApp, loadSrc, makeInstance, compile, treeText, flush, BANNER, SRC_FILES, ROOT };

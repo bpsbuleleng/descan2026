@@ -1,4 +1,4 @@
-/* AUTO-GENERATED from src/app.jsx by build.js — do not edit directly. */
+/* AUTO-GENERATED from src/* by build.js — do not edit directly. */
 // ---------------------------------------------------------------------------
 // css(): parse an inline-style string ("a:b;c:d") into a React style object.
 // Keeps the design's style strings usable verbatim as style={css("...")}.
@@ -714,6 +714,8 @@ class Component extends React.Component {
       this.saveStore(this.state);
     }
   }
+
+  // -- Formatters & utilitas tampilan ------------------------------------------
   rupiah(n) {
     n = Number(n || 0);
     return 'Rp' + n.toLocaleString('id-ID');
@@ -835,7 +837,13 @@ class Component extends React.Component {
       kamarMandi: null
     };
   }
+}
 
+// ---------------------------------------------------------------------------
+// Data layer: FASIH struct factories, seed warga, form state factories.
+// Methods dibagi terpisah dari class body utama agar mudah dikelola.
+// ---------------------------------------------------------------------------
+Object.assign(Component.prototype, {
   // -- FASIH: faktori anggota, pemetaan ringkasan, & pembangkit struktur seed --
   emptyDisabilitas() {
     const o = {};
@@ -843,14 +851,14 @@ class Component extends React.Component {
       o[it[0]] = '2. Tidak';
     });
     return o;
-  }
+  },
   emptyKesehatan() {
     const o = {};
     KESEHATAN_ITEMS.forEach(it => {
       o[it[0]] = '2. Tidak';
     });
     return o;
-  }
+  },
   mkAnggota(over) {
     over = over || {};
     return {
@@ -879,18 +887,18 @@ class Component extends React.Component {
       kesehatan: Object.assign(this.emptyKesehatan(), over.kesehatan || {}),
       rekening: over.rekening || '4. Tidak ada'
     };
-  }
+  },
   kepalaKeluarga(k) {
     const a = k && k.anggota || [];
     return a.find(x => String(x.hubungan || '').indexOf('1.') === 0) || a[0] || null;
-  }
+  },
   totalPendapatan(k) {
     let s = 0;
     (k && k.anggota || []).forEach(a => {
       s += Number(a.nilaiUsaha || 0);
     });
     return s;
-  }
+  },
   pendidikanProxy(p) {
     p = String(p || '');
     if (/^0\./.test(p)) return 'Tidak Sekolah';
@@ -899,7 +907,7 @@ class Component extends React.Component {
     if (/^3\./.test(p)) return 'SMA';
     if (/^4\./.test(p)) return 'D3';
     return 'S1';
-  }
+  },
   pendidikanProxyInv(old) {
     old = String(old || '');
     const m = {
@@ -911,13 +919,13 @@ class Component extends React.Component {
       'S1': '5. D4/S1'
     };
     return m[old] || '1. SD/sederajat';
-  }
+  },
   statusRumahProxy(r) {
     const s = String(r && r.statusKepemilikan || '');
     if (/Milik sendiri/.test(s)) return 'Milik Sendiri';
     if (/Kontrak|sewa/.test(s) && !/Bebas/.test(s)) return 'Sewa/Kontrak';
     return 'Numpang';
-  }
+  },
   defaultWilayah(meta) {
     const kodeDesa = {
       'Desa Sambirenteng': '[008]',
@@ -936,7 +944,7 @@ class Component extends React.Component {
       namaJalan: meta.alamat || '',
       nomorRumah: '-'
     };
-  }
+  },
   // Pemetaan struktur FASIH -> input lama hitungDesil() (dipertahankan apa adanya).
   deriveDesilInputs(k) {
     const r = k.rumah || {},
@@ -964,7 +972,7 @@ class Component extends React.Component {
       pekerjaan: krt.profesi || 'Tidak Bekerja',
       pendidikan: this.pendidikanProxy(krt.pendidikan)
     };
-  }
+  },
   // Ringkasan datar yang dipakai dashboard/daftar/riwayat/desil/snapshot.
   deriveSummary(k) {
     const inp = this.deriveDesilInputs(k);
@@ -977,7 +985,7 @@ class Component extends React.Component {
       disabilitas: disab,
       statusRumah: this.statusRumahProxy(k.rumah)
     });
-  }
+  },
   // Bangun blok terstruktur FASIH dari satu "state" ekonomi lama (untuk seed).
   stateToStruct(state, meta) {
     const invLantai = {
@@ -1091,7 +1099,7 @@ class Component extends React.Component {
       aset: aset,
       anggota: anggota
     };
-  }
+  },
   mkWarga(meta, states) {
     const snaps = [];
     let prev = null;
@@ -1146,8 +1154,7 @@ class Component extends React.Component {
       alamatSesuaiKK: '1. Ya, Sesuai KK',
       desilManual: false
     });
-  }
-
+  },
   // Data dummy: Kecamatan Tejakula, Kabupaten Buleleng — Desa Sambirenteng,
   // Penuktukan, dan Tembok. SLS = banjar dinas. Dirancang menutup semua kasus:
   // desil 1–10, semua status bansos, perubahan desil naik & turun, disabilitas,
@@ -1762,7 +1769,7 @@ class Component extends React.Component {
       bansos: 'Tidak Ada'
     }]);
     return W;
-  }
+  },
   seedSanggahan() {
     return [
     // Diajukan — menunggu diproses
@@ -1833,7 +1840,7 @@ class Component extends React.Component {
       tanggalSelesai: '2026-06-22',
       catatanOperator: 'Pengecekan STNK menunjukkan kendaraan atas nama yang bersangkutan. Sanggahan ditolak sesuai bukti dokumen.'
     }];
-  }
+  },
   blankForm() {
     const id = 'w' + Date.now();
     return {
@@ -1919,7 +1926,7 @@ class Component extends React.Component {
       _activeBlok: 'I',
       _showRingkasan: false
     };
-  }
+  },
   dataToForm(w) {
     const clone = JSON.parse(JSON.stringify(w));
     // Migrate: if aset was corrupted to an array by an earlier save, rebuild object from array
@@ -1959,10 +1966,17 @@ class Component extends React.Component {
       _activeBlok: 'I',
       _showRingkasan: false
     });
-  }
+  },
   opName() {
     return this.state && this.state.auth && this.state.auth.nama || this.props.namaOperator || 'Budi Santoso';
   }
+});
+
+// ---------------------------------------------------------------------------
+// Handler layer: navigasi, form FASIH, foto, validasi, simpan, sanggahan.
+// Methods dibagi terpisah dari class body utama agar mudah dikelola.
+// ---------------------------------------------------------------------------
+Object.assign(Component.prototype, {
   nav(key) {
     this.setState({
       view: key,
@@ -1970,18 +1984,18 @@ class Component extends React.Component {
       showSanggahanForm: false,
       processingId: null
     });
-  }
+  },
   onSearch(e) {
     this.setState({
       search: e.target.value
     });
-  }
+  },
   onFilter(e) {
     const k = e.target.getAttribute('data-filter');
     const o = {};
     o[k] = e.target.value;
     this.setState(o);
-  }
+  },
   onTambah() {
     if (!this.canCrud()) return;
     this.setState({
@@ -1989,7 +2003,7 @@ class Component extends React.Component {
       editId: null,
       view: 'form'
     });
-  }
+  },
   mulaiEdit(id) {
     if (!this.canCrud()) return;
     const w = this.state.warga.find(x => x.id === id);
@@ -1998,7 +2012,7 @@ class Component extends React.Component {
       editId: id,
       view: 'form'
     });
-  }
+  },
   onBatal() {
     this.setState({
       form: null,
@@ -2006,21 +2020,21 @@ class Component extends React.Component {
       view: this.state.selectedId ? 'riwayat' : 'daftar',
       confirmModal: null
     });
-  }
+  },
   // -- Handler form FASIH (nested path) ----------------------------------------
   onFormField(e) {
     this.setForm(e.target.getAttribute('data-path'), e.target.value);
-  }
+  },
   setForm(path, val) {
     this.setState(s => ({
       form: setPath(s.form, path, val)
     }));
-  }
+  },
   toggleOpenAnggota(i) {
     this.setState(s => ({
       form: setPath(s.form, '_openIdx', s.form._openIdx === i ? -1 : i)
     }));
-  }
+  },
   tambahAnggota() {
     if (!this.canCrud()) return;
     this.setState(s => {
@@ -2034,7 +2048,7 @@ class Component extends React.Component {
         form: setPath(f, '_openIdx', ang.length - 1)
       };
     });
-  }
+  },
   hapusAnggota(i) {
     if (!this.canCrud()) return;
     const nm = this.state.form.anggota[i] && this.state.form.anggota[i].nama || 'Anggota ' + (i + 1);
@@ -2050,7 +2064,7 @@ class Component extends React.Component {
         form: setPath(f, '_openIdx', Math.max(0, Math.min(s.form._openIdx, ang.length - 1)))
       };
     });
-  }
+  },
   setJumlahMeteran(n) {
     n = Math.max(0, Math.min(10, Number(n) || 0));
     const curLen = (this.state.form && this.state.form.meteran || []).length;
@@ -2067,7 +2081,7 @@ class Component extends React.Component {
         form: setPath(s.form, 'meteran', cur)
       };
     });
-  }
+  },
   // -- Navigasi form (sidebar / blok aktif / modal Ringkasan) ------------------
   goBlok(blok, openIdx, anchorPath) {
     this.setState(s => {
@@ -2088,18 +2102,18 @@ class Component extends React.Component {
         });
       }, 70);
     }
-  }
+  },
   goIssue(it) {
     let openIdx = null;
     const m = /^anggota\.(\d+)\./.exec(it.path || '');
     if (m) openIdx = Number(m[1]);
     this.goBlok(it.blok, openIdx, it.path);
-  }
+  },
   toggleRingkasan(v) {
     this.setState(s => ({
       form: setPath(s.form, '_showRingkasan', typeof v === 'boolean' ? v : !s.form._showRingkasan)
     }));
-  }
+  },
   // Progres pengisian: berapa field wajib (yang berlaku) sudah terisi.
   formProgress(k) {
     let total = 0,
@@ -2151,12 +2165,12 @@ class Component extends React.Component {
       filled: filled,
       pct: total ? Math.round(100 * filled / total) : 0
     };
-  }
+  },
   hapusFoto(path) {
     this.setState(s => ({
       form: setPath(s.form, path, null)
     }));
-  }
+  },
   handleFoto(path, e) {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -2208,7 +2222,7 @@ class Component extends React.Component {
     };
     reader.readAsDataURL(file);
     e.target.value = '';
-  }
+  },
   // Unggah foto ke Google Drive (mode server). Pratinjau lokal tampil dahulu,
   // lalu src ditukar ke URL Drive saat sukses. Bila gagal, base64 dipertahankan.
   uploadFotoServer(path, dataUrl, before, after) {
@@ -2256,8 +2270,7 @@ class Component extends React.Component {
       this.autoClear();
       return false;
     });
-  }
-
+  },
   // -- Validasi FASIH: GALAT (blokir finalisasi) / PERINGATAN / KOSONG ----------
   validateKeluarga(k) {
     const galat = [],
@@ -2343,10 +2356,10 @@ class Component extends React.Component {
       peringatan: peringatan,
       kosong: kosong
     };
-  }
+  },
   canFinalize(k) {
     return this.validateKeluarga(k || this.state.form).galat.length === 0;
-  }
+  },
   konfirmasiSimpan(type) {
     if (!this.canCrud()) return;
     const f = this.state.form;
@@ -2378,12 +2391,12 @@ class Component extends React.Component {
         type: type
       }
     });
-  }
+  },
   batalKonfirmasi() {
     this.setState({
       confirmModal: null
     });
-  }
+  },
   bukaRiwayat(id) {
     const w = this.state.warga.find(x => x.id === id);
     const last = w.snapshots[w.snapshots.length - 1].tanggal;
@@ -2393,13 +2406,13 @@ class Component extends React.Component {
       selectedTanggal: last,
       showSanggahanForm: false
     });
-  }
+  },
   pilihTanggal(t) {
     this.setState({
       selectedTanggal: t,
       showSanggahanForm: false
     });
-  }
+  },
   onKembali() {
     this.setState({
       view: 'daftar',
@@ -2407,14 +2420,13 @@ class Component extends React.Component {
       selectedTanggal: null,
       showSanggahanForm: false
     });
-  }
+  },
   autoClear() {
     clearTimeout(this._t);
     this._t = setTimeout(() => this.setState({
       toast: null
     }), 3600);
-  }
-
+  },
   // Simpan keluarga. status='draft' selalu boleh (tersimpan langsung ke
   // spreadsheet/lokal); status='final' hanya bila GALAT=0 (gerbang submit).
   simpanKeluarga(status) {
@@ -2524,7 +2536,7 @@ class Component extends React.Component {
       });
     });
     this.autoClear();
-  }
+  },
   onSanggahanChange(e) {
     const k = e.target.getAttribute('data-sgfield');
     const v = e.target.value;
@@ -2533,7 +2545,7 @@ class Component extends React.Component {
         [k]: v
       })
     }));
-  }
+  },
   onBukaFormSanggahan() {
     if (!this.canCrud()) return;
     this.setState({
@@ -2545,12 +2557,12 @@ class Component extends React.Component {
         alasan: ''
       }
     });
-  }
+  },
   onTutupFormSanggahan() {
     this.setState({
       showSanggahanForm: false
     });
-  }
+  },
   onSubmitSanggahan() {
     if (!this.canCrud()) return;
     const f = this.state.sanggahanForm;
@@ -2595,7 +2607,7 @@ class Component extends React.Component {
       sanggahan: newSg
     });
     this.autoClear();
-  }
+  },
   updateStatus(id, status) {
     if (!this.canCrud()) return;
     this.setState(s => ({
@@ -2607,14 +2619,14 @@ class Component extends React.Component {
       id: id,
       status: status
     });
-  }
+  },
   mulaiProses(id) {
     if (!this.canCrud()) return;
     this.setState({
       processingId: id,
       processCatatan: ''
     });
-  }
+  },
   selesaikanSanggahan(id, status, catatan) {
     if (!this.canCrud()) return;
     const tgl = this.state.today;
@@ -2634,6 +2646,12 @@ class Component extends React.Component {
       tanggalSelesai: tgl
     });
   }
+});
+
+// Render layer (renderVals, renderLogin, field, yt, renderForm, render).
+// Concatenated LAST by build.js — depends on utils.js, schema.js, component.jsx,
+// component-data.jsx, component-handlers.jsx.
+Object.assign(Component.prototype, {
   renderVals() {
     const st = this.state;
     const auth = st.auth;
@@ -3064,7 +3082,7 @@ class Component extends React.Component {
         if (st.confirmModal) this.simpanKeluarga(st.confirmModal.type);
       }
     };
-  }
+  },
   renderLogin() {
     const lf = this.state.loginForm;
     const inpL = 'width:100%;padding:11px 13px;border:1.5px solid #e0e0de;border-radius:9px;font-family:inherit;font-size:14px;color:#18191f;background:#fafaf9;';
@@ -3143,8 +3161,7 @@ class Component extends React.Component {
     }, d.u, " / ", d.p))))), /*#__PURE__*/React.createElement("div", {
       style: css('text-align:center; font-size:11px; font-weight:700; color:#92400e; letter-spacing:0.03em;')
     }, "PROTOTYPE · autentikasi demo sisi-klien")));
-  }
-
+  },
   // -- Render satu field FASIH (label kiri | kontrol kanan) ---------------------
   field(o) {
     const inp = 'width:100%;padding:9px 11px;border:1.5px solid #e0e0de;border-radius:8px;font-family:inherit;font-size:13.5px;color:#18191f;background:#fff;';
@@ -3209,7 +3226,7 @@ class Component extends React.Component {
     }, " *") : null, o.hint ? /*#__PURE__*/React.createElement("div", {
       style: css('color:' + ORANGE + ';font-style:italic;font-size:11px;font-weight:600;margin-top:3px;')
     }, o.hint) : null), /*#__PURE__*/React.createElement("div", null, control));
-  }
+  },
   // Item Ya/Tidak (R38 disabilitas a–f, R39 keluhan kesehatan a–r).
   yt(path, label, value) {
     return /*#__PURE__*/React.createElement("div", {
@@ -3228,7 +3245,7 @@ class Component extends React.Component {
         style: css('padding:4px 13px;border-radius:7px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid ' + (on ? ya ? '#f0b4b4' : '#bfcef8' : '#e0e0de') + ';background:' + (on ? ya ? '#fdecec' : '#eef2fc' : '#fff') + ';color:' + (on ? ya ? '#b91c1c' : '#1e50d0' : '#9ba2b6') + ';transition:background 0.13s,border-color 0.13s,color 0.13s;')
       }, ya ? 'Ya' : 'Tidak');
     })));
-  }
+  },
   renderForm(V) {
     const k = V.form,
       val = V.validasi;
@@ -3839,7 +3856,7 @@ class Component extends React.Component {
     }, g.label), /*#__PURE__*/React.createElement("span", {
       style: css('flex:none;color:#6b7280;')
     }, "›"))))))));
-  }
+  },
   render() {
     if (!this.state.auth) {
       return this.renderLogin();
@@ -4373,7 +4390,7 @@ class Component extends React.Component {
       style: css(V.toastStyle)
     }, V.toast.msg));
   }
-}
+});
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(/*#__PURE__*/React.createElement(Component, {
   namaDesa: "Kec. Tejakula, Buleleng",
