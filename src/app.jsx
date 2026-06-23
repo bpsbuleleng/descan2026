@@ -16,9 +16,8 @@ Object.assign(Component.prototype, {
     const sanggahanPending=vSanggahan.filter(s=>s.status==='Diajukan'||s.status==='Diproses').length;
     const titles={dashboard:'Dashboard',daftar:'Daftar Warga',form:(st.form&&!st.form.isNew)?'Edit Data':'Tambah Data',riwayat:'Riwayat Perubahan',sanggahan:'Usul Sanggah'};
 
-    const mkNav=(key,label)=>{ const active=st.view===key||(key==='daftar'&&(st.view==='form'||st.view==='riwayat')); return {label:label,onClick:()=>this.nav(key),style:'padding:0 18px;height:46px;font-family:inherit;font-size:13.5px;font-weight:'+(active?'700':'500')+';border:none;border-bottom:2px solid '+(active?'#1e50d0':'transparent')+';background:transparent;cursor:pointer;color:'+(active?'#1e50d0':'#52576b')+';white-space:nowrap;'}; };
-    const sanggahanLabel='Sanggahan'+(sanggahanPending>0?' ('+sanggahanPending+')':'');
-    const navItems=[mkNav('dashboard','Dashboard'),mkNav('daftar','Daftar Warga'),mkNav('sanggahan',sanggahanLabel)];
+    const mkNav=(key,label,badge)=>{ const active=st.view===key||(key==='daftar'&&(st.view==='form'||st.view==='riwayat')); return {label:label,badge:badge||0,onClick:()=>this.nav(key),style:'width:100%;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border:none;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13.5px;font-weight:'+(active?'700':'500')+';color:'+(active?'#fff':'#3d4152')+';background:'+(active?'#1e50d0':'transparent')+';transition:background 0.15s,color 0.15s;'}; };
+    const navItems=[mkNav('dashboard','Dashboard'),mkNav('daftar','Daftar Warga'),mkNav('sanggahan','Sanggahan',sanggahanPending)];
 
     const q=st.search.trim().toLowerCase();
     let list=vWarga.filter(w=>{
@@ -29,13 +28,12 @@ Object.assign(Component.prototype, {
       if(st.filterBansos!=='semua'&&w.bansos!==st.filterBansos) return false;
       return true;
     });
-    const wargaTampil=list.map(w=>{ const ds=this.getDS(w.desil); const bs=this.bansosStyle(w.bansos); const last=w.snapshots[w.snapshots.length-1]; const pt=last.fieldYangBerubah.length;
-      const draf=w.status==='draft';
-      return {id:w.id,nama:w.nama,nik:'NIK '+w.nik,rtRw:'RT '+w.rt+' / RW '+w.rw,dusun:w.dusun,desa:w.desa||'',pekerjaan:w.pekerjaan,penghasilan:this.rupiah(w.penghasilan)+' /bln',
+    if(st.sortBy){ const sb=st.sortBy,sd=st.sortDir; list=list.slice().sort((a,b)=>{ let va=a[sb],vb=b[sb]; if(sb==='desil'){va=Number(va);vb=Number(vb);} const c=va<vb?-1:va>vb?1:0; return sd==='asc'?c:-c; }); }
+    const wargaTampil=list.map(w=>{ const ds=this.getDS(w.desil); const bs=this.bansosStyle(w.bansos); const draf=w.status==='draft';
+      return {id:w.id,nama:w.nama,nik:'NIK '+w.nik,dusun:w.dusun,
         desilLabel:'Desil '+w.desil, desilBadgeStyle:'display:inline-flex;align-items:center;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;color:'+ds.text+';background:'+ds.bg+';',
         bansos:w.bansos, bansosBadgeStyle:'display:inline-flex;align-items:center;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;color:'+bs.text+';background:'+bs.bg+';',
         isDraf:draf, statusLabel:draf?'Draf':'Final', statusBadgeStyle:'display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;color:'+(draf?'#92400e':'#166534')+';background:'+(draf?'#fef3c7':'#dcfce7')+';border:1px solid '+(draf?'#fde68a':'#bbf7d0')+';',
-        jumlahTanggal:w.snapshots.length, adaPerubahanTerakhir:pt>0, perubahanTerakhirStr:pt+' field berubah',
         onLihat:()=>this.bukaRiwayat(w.id), onEdit:()=>this.mulaiEdit(w.id), onHover:(e)=>{e.currentTarget.style.background='#f9f9f7';}, onLeave:(e)=>{e.currentTarget.style.background='';}}; });
     const desaSet=[]; vWarga.forEach(w=>{ if(w.desa&&desaSet.indexOf(w.desa)<0)desaSet.push(w.desa); }); desaSet.sort();
     const desaOptions=[{value:'semua',label:'Semua Desa'}].concat(desaSet.map(v=>({value:v,label:v})));
@@ -119,7 +117,8 @@ Object.assign(Component.prototype, {
       form:form,
       formDesilLabel:formDesilLabel, formDesilStyle:formDesilStyle, formDesilHint:formDesilHint,
       validasi:validasi, canFinalize:canFinalize,
-      onSimpanDraf:()=>this.konfirmasiSimpan('draft'), onFinalisasi:()=>this.konfirmasiSimpan('final'), onBatal:()=>this.onBatal(),
+      onSimpanDraf:()=>this.konfirmasiSimpan('draft'), onFinalisasi:()=>this.konfirmasiSimpan('final'), onBatal:()=>this.onBatal(), onKeluarTanpaSimpan:()=>this.keluarTanpaSimpan(),
+      onSort:(col)=>this.onSort(col), sortBy:st.sortBy, sortDir:st.sortDir, loading:st.loading,
       riwayatWarga:riwayatWarga, snapshotList:snapshotList,
       selectedSnap:selectedSnap||{tanggalStr:'',operator:'',adaPerubahan:false,snapAwal:false,jumlahPerubahan:'',diffList:[],dataRows:[],snapFoto:[],jumlahSanggahan:''},
       sanggahanForSnap:sanggahanForSnap, showSanggahanForm:st.showSanggahanForm, sanggahanForm:st.sanggahanForm, canAjukanSanggahan:canAjukanSanggahan,
@@ -131,7 +130,7 @@ Object.assign(Component.prototype, {
   },
 
   renderLogin(){
-    const lf=this.state.loginForm;
+    const lf=this.state.loginForm; const isLoading=this.state.loading;
     const inpL='width:100%;padding:11px 13px;border:1.5px solid #e0e0de;border-radius:9px;font-family:inherit;font-size:14px;color:#18191f;background:#fafaf9;';
     const labL='display:block;font-size:12px;font-weight:600;color:#52576b;margin-bottom:6px;';
     const demo=[
@@ -155,7 +154,7 @@ Object.assign(Component.prototype, {
             {lf.error && (
               <div style={css('font-size:12.5px; font-weight:600; color:#b91c1c; background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; padding:9px 12px;')}>{lf.error}</div>
             )}
-            <button type="submit" style={css('padding:12px; font-family:inherit; font-size:14px; font-weight:700; border:none; background:#1e50d0; color:#fff; border-radius:9px; cursor:pointer; margin-top:2px;')}>Masuk</button>
+            <button type="submit" disabled={isLoading} style={css('padding:12px; font-family:inherit; font-size:14px; font-weight:700; border:none; background:'+(isLoading?'#93b4ef':'#1e50d0')+'; color:#fff; border-radius:9px; cursor:'+(isLoading?'not-allowed':'pointer')+'; margin-top:2px; display:flex; align-items:center; justify-content:center; gap:8px;')}>{isLoading&&<span style={css('width:16px;height:16px;border:2px solid rgba(255,255,255,0.4);border-top-color:#fff;border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block;')}></span>}{isLoading?'Memuat…':'Masuk'}</button>
           </form>
           <div style={css('background:#fff; border-radius:14px; padding:16px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);')}>
             <div style={css('font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:10px;')}>Akun Demo</div>
@@ -204,7 +203,7 @@ Object.assign(Component.prototype, {
     }
     return (<div key={o.p} id={'f_'+o.p} style={css('display:grid;grid-template-columns:minmax(150px,38%) 1fr;gap:18px;align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;animation:fadein 0.18s ease;')}>
       <div style={css('font-size:13px;font-weight:600;color:#2c3442;line-height:1.5;padding-top:7px;')}><span style={css('color:#b0b5c2;font-weight:700;margin-right:6px;')}>{o.r}.</span>{o.label}{o.req?<span style={css('color:'+ORANGE+';')}> *</span>:null}{o.hint?<div style={css('color:'+ORANGE+';font-style:italic;font-size:11px;font-weight:600;margin-top:3px;')}>{o.hint}</div>:null}</div>
-      <div>{control}</div>
+      <div>{control}{o.error&&<div style={css('font-size:11.5px;color:#b91c1c;font-weight:600;margin-top:5px;padding:4px 9px;background:#fef2f2;border-radius:6px;border-left:3px solid #fca5a5;')}>{o.error}</div>}</div>
     </div>);
   },
   // Item Ya/Tidak (R38 disabilitas a–f, R39 keluhan kesehatan a–r).
@@ -222,9 +221,10 @@ Object.assign(Component.prototype, {
     const ab=k._activeBlok||'I';
     const prog=this.formProgress(k);
     const gB={}; val.galat.forEach(g=>{ gB[g.blok]=(gB[g.blok]||0)+1; });
+    const errMap={}; val.galat.forEach(g=>{if(g.path&&!errMap[g.path])errMap[g.path]=g.label;});
     const lab='display:block;font-size:12.5px;font-weight:600;color:#3d4152;margin-bottom:6px;';
     const inp='width:100%;padding:9px 11px;border:1.5px solid #e0e0de;border-radius:8px;font-family:inherit;font-size:13.5px;color:#18191f;background:#fff;';
-    const fld=(d,scope)=>this.field({p:d.p,r:d.r,label:d.label,type:d.type,opts:d.opts,req:d.req,hint:d.hint,value:getPath(scope||k,d.p)});
+    const fld=(d,scope)=>this.field({p:d.p,r:d.r,label:d.label,type:d.type,opts:d.opts,req:d.req,hint:d.hint,value:getPath(scope||k,d.p),error:errMap[d.p]});
     const fields=(arr)=>arr.filter(d=>!d.when||d.when(k)).map(d=>fld(d));
     const sub=(t)=>(<div style={css('text-align:center;font-size:12.5px;font-weight:800;color:'+ORANGE+';text-transform:uppercase;letter-spacing:0.05em;margin:6px 0 10px;')}>{t}</div>);
     const pakaiMeteran=/dengan meteran/.test(getPath(k,'rumah.sumberPenerangan')||'');
@@ -312,14 +312,30 @@ Object.assign(Component.prototype, {
               <span style={css('font-size:13.5px;font-weight:800;color:#18191f;')}>{open?'▾':'▸'} {i+1}. {a.nama||'(anggota baru)'}</span>
               <span style={css('font-size:11.5px;color:#9ba2b6;')}>{a.hubungan||'—'} · {a.jk||'—'}</span>
             </button>
-            {(k.anggota.length>1)&&(<button onClick={()=>this.hapusAnggota(i)} style={css('flex:none;font-size:11.5px;font-weight:700;color:#b91c1c;background:#fef2f2;border:1px solid #f3c9c9;border-radius:7px;padding:5px 10px;cursor:pointer;font-family:inherit;')}>Hapus</button>)}
+            {(i>0&&k.anggota.length>1)&&(<button onClick={()=>this.hapusAnggota(i)} style={css('flex:none;font-size:11.5px;font-weight:700;color:#b91c1c;background:#fef2f2;border:1px solid #f3c9c9;border-radius:7px;padding:5px 10px;cursor:pointer;font-family:inherit;')}>Hapus</button>)}
           </div>);
         if(!open) return (<div key={i} id={'sec-anggota-'+i} style={css('background:#fafaf9;border:1px solid #ececea;border-radius:10px;padding:12px 14px;')}>{headerRow}</div>);
         return (
           <div key={i} id={'sec-anggota-'+i} style={css('background:#fff;border:1.5px solid #f3cba8;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px;')}>
             {headerRow}
             <div style={css('font-size:11px;color:#9ba2b6;margin-bottom:4px;')}>R24. Nomor Urut Anggota: <strong style={css('color:#52576b;')}>{a.no||i+1}</strong></div>
-            {ANGGOTA_FIELDS.filter(d=>!d.when||d.when(k,a)).map(d=>this.field({p:base+d.rp,r:d.r,label:d.label,type:d.type,opts:d.opts,req:d.req,value:a[d.rp]}))}
+            {i===0&&<div style={css('font-size:11.5px;color:#1e50d0;background:#eef2fc;border:1px solid #c7d7f6;border-radius:8px;padding:8px 12px;margin-bottom:4px;')}>ℹ Nama dan NIK disinkronkan otomatis dari Blok I. Edit di Blok I untuk mengubahnya.</div>}
+            {ANGGOTA_FIELDS.filter(d=>!d.when||d.when(k,a)).map(d=>{
+              if(i===0&&(d.rp==='nama'||d.rp==='nik')){
+                const err=errMap[base+d.rp];
+                return (<div key={d.rp} style={css('display:grid;grid-template-columns:minmax(150px,38%) 1fr;gap:18px;align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;')}>
+                  <div style={css('font-size:13px;font-weight:600;color:#2c3442;padding-top:7px;')}><span style={css('color:#b0b5c2;font-weight:700;margin-right:6px;')}>{d.r}.</span>{d.label}{d.req?<span style={css('color:'+ORANGE+';')}> *</span>:null}</div>
+                  <div>
+                    <div style={css('display:flex;align-items:center;gap:8px;padding:9px 11px;background:#f7f7f5;border:1.5px solid #e0e0de;border-radius:8px;')}>
+                      <span style={css('font-size:13.5px;color:#3d4152;flex:1;')}>{a[d.rp]||'—'}</span>
+                      <span style={css('font-size:10.5px;color:#9ba2b6;white-space:nowrap;')}>🔒 Blok I</span>
+                    </div>
+                    {err&&<div style={css('font-size:11.5px;color:#b91c1c;font-weight:600;margin-top:5px;padding:4px 9px;background:#fef2f2;border-radius:6px;border-left:3px solid #fca5a5;')}>{err}</div>}
+                  </div>
+                </div>);
+              }
+              return this.field({p:base+d.rp,r:d.r,label:d.label,type:d.type,opts:d.opts,req:d.req,value:a[d.rp],error:errMap[base+d.rp]});
+            })}
             <div style={css('display:grid;grid-template-columns:minmax(150px,38%) 1fr;gap:18px;align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;')}>
               <div style={css('font-size:13px;font-weight:600;color:#2c3442;padding-top:7px;')}><span style={css('color:#b0b5c2;font-weight:700;margin-right:6px;')}>30.</span>Tanggal Lahir<span style={css('color:'+ORANGE+';')}> *</span></div>
               <div style={css('display:grid;grid-template-columns:1fr 1.4fr 1fr 1fr;gap:8px;')}>
@@ -418,8 +434,28 @@ Object.assign(Component.prototype, {
           </div>
         </section>
 
+        {/* Modal Keluar Kuesioner */}
+        {V.confirmModal&&V.confirmModal.type==='batal'&&(
+          <div onClick={()=>V.onBatalKonfirmasi()} style={css('position:fixed;inset:0;z-index:90;background:rgba(15,18,28,0.45);display:flex;align-items:center;justify-content:center;padding:20px;animation:fadein 0.15s ease;')}>
+            <div onClick={(e)=>e.stopPropagation()} style={css('background:#fff;border-radius:16px;width:100%;max-width:420px;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);')}>
+              <div style={css('display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid #f0f0ee;')}>
+                <div>
+                  <div style={css('font-size:16px;font-weight:800;color:#18191f;')}>Keluar dari Kuesioner?</div>
+                  <div style={css('font-size:12px;color:#9ba2b6;margin-top:2px;')}>Perubahan yang belum disimpan akan hilang</div>
+                </div>
+                <button onClick={()=>V.onBatalKonfirmasi()} style={css('width:30px;height:30px;border-radius:8px;border:none;background:#f3f3f2;color:#52576b;font-size:16px;cursor:pointer;')}>×</button>
+              </div>
+              <div style={css('display:flex;flex-direction:column;gap:8px;padding:18px 20px;')}>
+                <button onClick={()=>V.onBatalKonfirmasi()} style={css('text-align:left;padding:12px 16px;border-radius:10px;border:1.5px solid #e0e0de;background:#fff;font-family:inherit;font-size:13.5px;font-weight:600;color:#3d4152;cursor:pointer;')}>Tetap di sini</button>
+                <button onClick={()=>this.simpanKeluarga('draft')} style={css('text-align:left;padding:12px 16px;border-radius:10px;border:1.5px solid #f3cba8;background:'+ORANGE_BG+';font-family:inherit;font-size:13.5px;font-weight:700;color:'+ORANGE+';cursor:pointer;')}>Simpan sebagai Draf &amp; Keluar</button>
+                <button onClick={()=>V.onKeluarTanpaSimpan()} style={css('text-align:left;padding:12px 16px;border-radius:10px;border:1.5px solid #fca5a5;background:#fef2f2;font-family:inherit;font-size:13.5px;font-weight:700;color:#b91c1c;cursor:pointer;')}>Keluar Tanpa Menyimpan</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Modal Konfirmasi Simpan */}
-        {V.confirmModal && (
+        {V.confirmModal&&V.confirmModal.type!=='batal' && (
           <div onClick={()=>V.onBatalKonfirmasi()} style={css('position:fixed;inset:0;z-index:90;background:rgba(15,18,28,0.45);display:flex;align-items:center;justify-content:center;padding:20px;animation:fadein 0.15s ease;')}>
             <div onClick={(e)=>e.stopPropagation()} style={css('background:#fff;border-radius:16px;width:100%;max-width:480px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);')}>
               <div style={css('display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid #f0f0ee;')}>
@@ -543,13 +579,23 @@ Object.assign(Component.prototype, {
           </div>
         </header>
 
-        <div style={css('position:sticky; top:58px; z-index:29; background:#fff; border-bottom:1px solid #e8e8e6; overflow-x:auto; -webkit-overflow-scrolling:touch;')}>
-          <div style={css('display:flex; min-width:max-content; padding:0 20px;')}>
-            {V.navItems.map((item,i)=>(<button key={i} onClick={item.onClick} style={css(item.style)}>{item.label}</button>))}
-          </div>
-        </div>
+        <div style={css('flex:1; display:flex; overflow:hidden;')}>
+          {!V.isForm && (
+            <aside style={css('width:220px; flex:none; position:sticky; top:58px; align-self:flex-start; max-height:calc(100vh - 58px); overflow-y:auto; background:#fff; border-right:1px solid #e8e8e6; padding:14px 12px; display:flex; flex-direction:column; gap:6px;')}>
+              <div style={css('padding:4px 4px 14px; border-bottom:1px solid #f0f0ee; margin-bottom:4px;')}>
+                <div style={css('font-size:14px; font-weight:800; color:#18191f;')}>DTSEN Desa</div>
+                <div style={css('font-size:11px; color:#9ba2b6; margin-top:2px;')}>{V.namaDesa}</div>
+              </div>
+              {V.navItems.map((item,i)=>(
+                <button key={i} onClick={item.onClick} style={css(item.style)}>
+                  <span>{item.label}</span>
+                  {item.badge>0&&<span style={css('background:#dc2626;color:#fff;border-radius:8px;padding:1px 7px;font-size:10px;font-weight:800;min-width:18px;text-align:center;')}>{item.badge}</span>}
+                </button>
+              ))}
+            </aside>
+          )}
 
-        <main style={css('flex:1; padding:24px 20px; max-width:1200px; width:100%; margin:0 auto;')}>
+          <main style={css('flex:1; min-width:0; padding:24px 20px; max-width:1200px; margin:0 auto; overflow-x:hidden;')}>
 
           {V.isDashboard && (
             <div style={css('display:flex; flex-direction:column; gap:20px; animation:fadein 0.2s ease;')}>
@@ -628,59 +674,56 @@ Object.assign(Component.prototype, {
                 )}
               </div>
 
-              <div style={css('background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05); overflow-x:auto;')}>
-                <table style={css('width:100%; border-collapse:collapse; min-width:720px;')}>
-                  <thead>
-                    <tr style={css('background:#fafaf9; border-bottom:1px solid #eeeeed;')}>
-                      <th style={css(th)}>Kepala Keluarga</th>
-                      <th style={css(th)}>Alamat</th>
-                      <th style={css(th)}>Pekerjaan</th>
-                      <th style={css(th)}>Desil</th>
-                      <th style={css(th)}>Bansos</th>
-                      <th style={css(th)}>Riwayat</th>
-                      <th style={css('text-align:right; padding:12px 16px; font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.06em;')}>Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {V.wargaTampil.map((w,i)=>(
-                      <tr key={w.id} style={css('border-top:1px solid #f0f0ee;transition:background 0.12s;')} onMouseEnter={w.onHover} onMouseLeave={w.onLeave}>
-                        <td style={css('padding:13px 16px; vertical-align:middle;')}>
-                          <div style={css('display:flex; align-items:center; gap:7px;')}><span style={css('font-size:13.5px; font-weight:700; color:#18191f;')}>{w.nama}</span><span style={css(w.statusBadgeStyle)}>{w.statusLabel}</span></div>
-                          <div style={css('font-size:11px; color:#9ba2b6; margin-top:2px; font-variant-numeric:tabular-nums;')}>{w.nik}</div>
-                        </td>
-                        <td style={css('padding:13px 16px; vertical-align:middle;')}>
-                          <div style={css('font-size:13px; font-weight:600; color:#3d4152;')}>{w.rtRw}</div>
-                          <div style={css('font-size:11px; color:#9ba2b6; margin-top:2px;')}>{w.dusun}</div>
-                          <div style={css('font-size:11px; color:#9ba2b6; margin-top:1px;')}>{w.desa}</div>
-                        </td>
-                        <td style={css('padding:13px 16px; vertical-align:middle;')}>
-                          <div style={css('font-size:13px; font-weight:600; color:#3d4152;')}>{w.pekerjaan}</div>
-                          <div style={css('font-size:11px; color:#9ba2b6; margin-top:2px; font-variant-numeric:tabular-nums;')}>{w.penghasilan}</div>
-                        </td>
-                        <td style={css('padding:13px 16px; vertical-align:middle;')}><span style={css(w.desilBadgeStyle)}>{w.desilLabel}</span></td>
-                        <td style={css('padding:13px 16px; vertical-align:middle;')}><span style={css(w.bansosBadgeStyle)}>{w.bansos}</span></td>
-                        <td style={css('padding:13px 16px; vertical-align:middle;')}>
-                          <div style={css('font-size:12px; font-weight:600; color:#3d4152;')}>{w.jumlahTanggal} snapshot</div>
-                          {w.adaPerubahanTerakhir && (
-                            <div style={css('font-size:11px; color:#b45309; font-weight:700; margin-top:2px;')}>{w.perubahanTerakhirStr}</div>
-                          )}
-                        </td>
-                        <td style={css('padding:13px 16px; vertical-align:middle;')}>
-                          <div style={css('display:flex; gap:6px; justify-content:flex-end;')}>
-                            <button onClick={w.onLihat} style={css('padding:7px 12px; font-family:inherit; font-size:12px; font-weight:600; border:1.5px solid #e0e0de; background:#fff; color:#3d4152; border-radius:8px; cursor:pointer;')}>Riwayat</button>
-                            {V.canCrud && (
-                              <button onClick={w.onEdit} style={css('padding:7px 12px; font-family:inherit; font-size:12px; font-weight:600; border:none; background:#1e50d0; color:#fff; border-radius:8px; cursor:pointer;')}>Edit</button>
-                            )}
-                          </div>
-                        </td>
+              {(() => {
+                const Th=({col,label,right})=>{
+                  const sorted=V.sortBy===col; const asc=V.sortDir==='asc';
+                  const base=th+(right?'text-align:right;':'')+'cursor:pointer;user-select:none;';
+                  return (<th onClick={()=>V.onSort(col)} style={css(base)}>
+                    {label} <span style={css('color:'+(sorted?'#1e50d0':'#c4c8d4')+';')}>{sorted?(asc?'↑':'↓'):'↕'}</span>
+                  </th>);
+                };
+                return (
+                <div style={css('background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05); overflow-x:auto;')}>
+                  <table style={css('width:100%; border-collapse:collapse; min-width:500px;')}>
+                    <thead>
+                      <tr style={css('background:#fafaf9; border-bottom:1px solid #eeeeed;')}>
+                        <Th col="nama" label="Kepala Keluarga" />
+                        <Th col="dusun" label="Banjar" />
+                        <Th col="desil" label="Desil" />
+                        <Th col="bansos" label="Bansos" />
+                        <th style={css('text-align:right; padding:12px 16px; font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.06em;')}>Aksi</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {V.kosong && (
-                  <div style={css('padding:40px; text-align:center; color:#9ba2b6; font-size:13.5px;')}>Tidak ada rumah tangga yang cocok.</div>
-                )}
-              </div>
+                    </thead>
+                    <tbody>
+                      {V.wargaTampil.map((w,i)=>(
+                        <tr key={w.id} style={css('border-top:1px solid #f0f0ee;transition:background 0.12s;')} onMouseEnter={w.onHover} onMouseLeave={w.onLeave}>
+                          <td style={css('padding:12px 16px; vertical-align:middle;')}>
+                            <div style={css('display:flex; align-items:center; gap:7px;')}><span style={css('font-size:13.5px; font-weight:700; color:#18191f;')}>{w.nama}</span><span style={css(w.statusBadgeStyle)}>{w.statusLabel}</span></div>
+                            <div style={css('font-size:11px; color:#9ba2b6; margin-top:2px; font-variant-numeric:tabular-nums;')}>{w.nik}</div>
+                          </td>
+                          <td style={css('padding:12px 16px; vertical-align:middle;')}>
+                            <div style={css('font-size:13px; font-weight:600; color:#3d4152;')}>{w.dusun.replace('Banjar Dinas ','')}</div>
+                          </td>
+                          <td style={css('padding:12px 16px; vertical-align:middle;')}><span style={css(w.desilBadgeStyle)}>{w.desilLabel}</span></td>
+                          <td style={css('padding:12px 16px; vertical-align:middle;')}><span style={css(w.bansosBadgeStyle)}>{w.bansos}</span></td>
+                          <td style={css('padding:12px 16px; vertical-align:middle; text-align:right;')}>
+                            <div style={css('display:inline-flex; gap:5px;')}>
+                              <button onClick={w.onLihat} title="Lihat Riwayat" style={css('width:32px;height:32px;border:1.5px solid #e0e0de;background:#fff;color:#3d4152;border-radius:8px;cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;')}>⊚</button>
+                              {V.canCrud && (
+                                <button onClick={w.onEdit} title="Edit Data" style={css('width:32px;height:32px;border:none;background:#1e50d0;color:#fff;border-radius:8px;cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;')}>✎</button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {V.kosong && (
+                    <div style={css('padding:40px; text-align:center; color:#9ba2b6; font-size:13.5px;')}>Tidak ada rumah tangga yang cocok.</div>
+                  )}
+                </div>
+                );
+              })()}
               <span style={css('font-size:12px; color:#9ba2b6;')}>Menampilkan {V.jumlahTampil} dari {V.jumlahTotal} rumah tangga</span>
             </div>
           )}
@@ -899,9 +942,18 @@ Object.assign(Component.prototype, {
           )}
 
         </main>
+        </div>
 
         {V.toast && (
           <div style={css(V.toastStyle)}>{V.toast.msg}</div>
+        )}
+        {V.loading && (
+          <div style={css('position:fixed;inset:0;z-index:100;background:rgba(15,18,28,0.4);display:flex;align-items:center;justify-content:center;animation:fadein 0.15s ease;')}>
+            <div style={css('background:#fff;border-radius:16px;padding:28px 40px;display:flex;flex-direction:column;align-items:center;gap:16px;box-shadow:0 20px 60px rgba(0,0,0,0.3);')}>
+              <div style={css('width:40px;height:40px;border:4px solid #e8e8e6;border-top-color:#1e50d0;border-radius:50%;animation:spin 0.7s linear infinite;')}></div>
+              <span style={css('font-size:14px;font-weight:600;color:#52576b;')}>Memuat…</span>
+            </div>
+          </div>
         )}
       </div>
     );

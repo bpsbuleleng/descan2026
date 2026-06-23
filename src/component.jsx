@@ -40,9 +40,12 @@ class Component extends React.Component {
   }
   bootstrap(){
     if(!this.serverMode()) return;
+    this.setState({loading:true});
     this.apiCall('bootstrap',{}).then(res=>{
+      this.setState({loading:false});
       if(res&&res.ok){ this.setState({warga:res.warga||[],sanggahan:res.sanggahan||[]}); }
-    }).catch(()=>{ this.setState({toast:{type:'err',msg:'Gagal memuat data dari server. Menampilkan data lokal.'}}); this.autoClear(); });
+      else { this.setState({toast:{type:'err',msg:'Gagal memuat data dari server. Menampilkan data lokal.'}}); this.autoClear(); }
+    }).catch(()=>{ this.setState({loading:false,toast:{type:'err',msg:'Gagal memuat data dari server. Menampilkan data lokal.'}}); this.autoClear(); });
   }
   // Dorong perubahan ke server (no-op di mode lokal). Kegagalan tidak memblokir
   // state lokal — hanya memunculkan notifikasi.
@@ -73,12 +76,14 @@ class Component extends React.Component {
     const f=this.state.loginForm; const u=(f.username||'').trim().toLowerCase();
     if(this.serverMode()){
       // Mode server: validasi & ambil data dari Google Sheets.
+      this.setState({loading:true});
       this._cred={username:u,password:f.password};
       this.apiCall('login',{username:u,password:f.password}).then(res=>{
+        this.setState({loading:false});
         if(!res||!res.ok){ this._cred=null; this.loginFail(res&&res.error); return; }
         this.loginOk(res.user,false); // sesi server tidak dipersist (butuh login tiap sesi)
         this.bootstrap();
-      }).catch(()=>{ this._cred=null; this.loginFail('Server tidak terjangkau. Periksa koneksi / URL.'); });
+      }).catch(()=>{ this.setState({loading:false}); this._cred=null; this.loginFail('Server tidak terjangkau. Periksa koneksi / URL.'); });
       return;
     }
     // Mode lokal: akun demo bawaan.
@@ -87,7 +92,7 @@ class Component extends React.Component {
     this.loginOk({username:acc.username,nama:acc.nama,role:acc.role,wilayah:acc.wilayah},true);
   }
   logout(){ try{ window.localStorage.removeItem(Component.AUTH_KEY); }catch(e){} this._cred=null;
-    this.setState({auth:null,view:'dashboard',form:null,editId:null,selectedId:null,selectedTanggal:null,showSanggahanForm:false,processingId:null,confirmModal:null,toast:null}); }
+    this.setState({auth:null,view:'dashboard',form:null,editId:null,selectedId:null,selectedTanggal:null,showSanggahanForm:false,processingId:null,confirmModal:null,toast:null,loading:false,sortBy:null,sortDir:'asc'}); }
 
   initState(){
     const saved=this.loadStore();
@@ -97,8 +102,8 @@ class Component extends React.Component {
       form:null, editId:null, selectedId:null, selectedTanggal:null,
       showSanggahanForm:false, sanggahanForm:{pengaju:'',nik:'',hubungan:'Warga Bersangkutan',alasan:''},
       processingId:null, processCatatan:'',
-      confirmModal:null,
-      toast:null, today:'2026-06-19'};
+      confirmModal:null, loading:false, sortBy:null, sortDir:'asc',
+      toast:null, today:new Date().toISOString().slice(0,10)};
   }
 
   // -- Persistensi data (localStorage) -----------------------------------------

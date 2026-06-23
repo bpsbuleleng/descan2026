@@ -229,6 +229,7 @@ Object.assign(Component.prototype, {
       if(arr.indexOf('Kulkas')>=0) clone.aset.kulkas=1;
       if(arr.indexOf('AC')>=0) clone.aset.ac=1;
     }
+    if(clone.anggota&&clone.anggota.length>0){ if(clone.nama) clone.anggota[0].nama=clone.nama; if(clone.nik) clone.anggota[0].nik=clone.nik; }
     return Object.assign(clone,{isNew:false, desilManual:!!w.desilManual, desil:String(w.desil||5), bansos:w.bansos||'Tidak Ada', _openIdx:0, _activeBlok:'I', _showRingkasan:false});
   },
   opName(){ return (this.state&&this.state.auth&&this.state.auth.nama)||this.props.namaOperator||'Budi Santoso'; },

@@ -444,15 +444,30 @@ class Component extends React.Component {
   }
   bootstrap() {
     if (!this.serverMode()) return;
+    this.setState({
+      loading: true
+    });
     this.apiCall('bootstrap', {}).then(res => {
+      this.setState({
+        loading: false
+      });
       if (res && res.ok) {
         this.setState({
           warga: res.warga || [],
           sanggahan: res.sanggahan || []
         });
+      } else {
+        this.setState({
+          toast: {
+            type: 'err',
+            msg: 'Gagal memuat data dari server. Menampilkan data lokal.'
+          }
+        });
+        this.autoClear();
       }
     }).catch(() => {
       this.setState({
+        loading: false,
         toast: {
           type: 'err',
           msg: 'Gagal memuat data dari server. Menampilkan data lokal.'
@@ -553,6 +568,9 @@ class Component extends React.Component {
     const u = (f.username || '').trim().toLowerCase();
     if (this.serverMode()) {
       // Mode server: validasi & ambil data dari Google Sheets.
+      this.setState({
+        loading: true
+      });
       this._cred = {
         username: u,
         password: f.password
@@ -561,6 +579,9 @@ class Component extends React.Component {
         username: u,
         password: f.password
       }).then(res => {
+        this.setState({
+          loading: false
+        });
         if (!res || !res.ok) {
           this._cred = null;
           this.loginFail(res && res.error);
@@ -569,6 +590,9 @@ class Component extends React.Component {
         this.loginOk(res.user, false); // sesi server tidak dipersist (butuh login tiap sesi)
         this.bootstrap();
       }).catch(() => {
+        this.setState({
+          loading: false
+        });
         this._cred = null;
         this.loginFail('Server tidak terjangkau. Periksa koneksi / URL.');
       });
@@ -602,7 +626,10 @@ class Component extends React.Component {
       showSanggahanForm: false,
       processingId: null,
       confirmModal: null,
-      toast: null
+      toast: null,
+      loading: false,
+      sortBy: null,
+      sortDir: 'asc'
     });
   }
   initState() {
@@ -637,8 +664,11 @@ class Component extends React.Component {
       processingId: null,
       processCatatan: '',
       confirmModal: null,
+      loading: false,
+      sortBy: null,
+      sortDir: 'asc',
       toast: null,
-      today: '2026-06-19'
+      today: new Date().toISOString().slice(0, 10)
     };
   }
 
@@ -1957,6 +1987,10 @@ Object.assign(Component.prototype, {
       if (arr.indexOf('Kulkas') >= 0) clone.aset.kulkas = 1;
       if (arr.indexOf('AC') >= 0) clone.aset.ac = 1;
     }
+    if (clone.anggota && clone.anggota.length > 0) {
+      if (clone.nama) clone.anggota[0].nama = clone.nama;
+      if (clone.nik) clone.anggota[0].nik = clone.nik;
+    }
     return Object.assign(clone, {
       isNew: false,
       desilManual: !!w.desilManual,
@@ -2015,6 +2049,13 @@ Object.assign(Component.prototype, {
   },
   onBatal() {
     this.setState({
+      confirmModal: {
+        type: 'batal'
+      }
+    });
+  },
+  keluarTanpaSimpan() {
+    this.setState({
       form: null,
       editId: null,
       view: this.state.selectedId ? 'riwayat' : 'daftar',
@@ -2026,9 +2067,14 @@ Object.assign(Component.prototype, {
     this.setForm(e.target.getAttribute('data-path'), e.target.value);
   },
   setForm(path, val) {
-    this.setState(s => ({
-      form: setPath(s.form, path, val)
-    }));
+    this.setState(s => {
+      let f = setPath(s.form, path, val);
+      if (path === 'nama') f = setPath(f, 'anggota.0.nama', val);
+      if (path === 'nik') f = setPath(f, 'anggota.0.nik', val);
+      return {
+        form: f
+      };
+    });
   },
   toggleOpenAnggota(i) {
     this.setState(s => ({
@@ -2421,6 +2467,12 @@ Object.assign(Component.prototype, {
       showSanggahanForm: false
     });
   },
+  onSort(col) {
+    this.setState(s => ({
+      sortBy: col,
+      sortDir: s.sortBy === col && s.sortDir === 'asc' ? 'desc' : 'asc'
+    }));
+  },
   autoClear() {
     clearTimeout(this._t);
     this._t = setTimeout(() => this.setState({
@@ -2455,7 +2507,7 @@ Object.assign(Component.prototype, {
         return;
       }
     }
-    const today = this.state.today,
+    const today = new Date().toISOString().slice(0, 10),
       operator = this.opName();
     const summary = this.deriveSummary(f);
     const foto = Object.assign({}, f.rumah && f.rumah.foto || this.emptyFoto());
@@ -2674,16 +2726,16 @@ Object.assign(Component.prototype, {
       riwayat: 'Riwayat Perubahan',
       sanggahan: 'Usul Sanggah'
     };
-    const mkNav = (key, label) => {
+    const mkNav = (key, label, badge) => {
       const active = st.view === key || key === 'daftar' && (st.view === 'form' || st.view === 'riwayat');
       return {
         label: label,
+        badge: badge || 0,
         onClick: () => this.nav(key),
-        style: 'padding:0 18px;height:46px;font-family:inherit;font-size:13.5px;font-weight:' + (active ? '700' : '500') + ';border:none;border-bottom:2px solid ' + (active ? '#1e50d0' : 'transparent') + ';background:transparent;cursor:pointer;color:' + (active ? '#1e50d0' : '#52576b') + ';white-space:nowrap;'
+        style: 'width:100%;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border:none;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13.5px;font-weight:' + (active ? '700' : '500') + ';color:' + (active ? '#fff' : '#3d4152') + ';background:' + (active ? '#1e50d0' : 'transparent') + ';transition:background 0.15s,color 0.15s;'
       };
     };
-    const sanggahanLabel = 'Sanggahan' + (sanggahanPending > 0 ? ' (' + sanggahanPending + ')' : '');
-    const navItems = [mkNav('dashboard', 'Dashboard'), mkNav('daftar', 'Daftar Warga'), mkNav('sanggahan', sanggahanLabel)];
+    const navItems = [mkNav('dashboard', 'Dashboard'), mkNav('daftar', 'Daftar Warga'), mkNav('sanggahan', 'Sanggahan', sanggahanPending)];
     const q = st.search.trim().toLowerCase();
     let list = vWarga.filter(w => {
       if (q && (w.nama + ' ' + w.nik + ' ' + w.noKK).toLowerCase().indexOf(q) < 0) return false;
@@ -2697,21 +2749,29 @@ Object.assign(Component.prototype, {
       if (st.filterBansos !== 'semua' && w.bansos !== st.filterBansos) return false;
       return true;
     });
+    if (st.sortBy) {
+      const sb = st.sortBy,
+        sd = st.sortDir;
+      list = list.slice().sort((a, b) => {
+        let va = a[sb],
+          vb = b[sb];
+        if (sb === 'desil') {
+          va = Number(va);
+          vb = Number(vb);
+        }
+        const c = va < vb ? -1 : va > vb ? 1 : 0;
+        return sd === 'asc' ? c : -c;
+      });
+    }
     const wargaTampil = list.map(w => {
       const ds = this.getDS(w.desil);
       const bs = this.bansosStyle(w.bansos);
-      const last = w.snapshots[w.snapshots.length - 1];
-      const pt = last.fieldYangBerubah.length;
       const draf = w.status === 'draft';
       return {
         id: w.id,
         nama: w.nama,
         nik: 'NIK ' + w.nik,
-        rtRw: 'RT ' + w.rt + ' / RW ' + w.rw,
         dusun: w.dusun,
-        desa: w.desa || '',
-        pekerjaan: w.pekerjaan,
-        penghasilan: this.rupiah(w.penghasilan) + ' /bln',
         desilLabel: 'Desil ' + w.desil,
         desilBadgeStyle: 'display:inline-flex;align-items:center;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;color:' + ds.text + ';background:' + ds.bg + ';',
         bansos: w.bansos,
@@ -2719,9 +2779,6 @@ Object.assign(Component.prototype, {
         isDraf: draf,
         statusLabel: draf ? 'Draf' : 'Final',
         statusBadgeStyle: 'display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;color:' + (draf ? '#92400e' : '#166534') + ';background:' + (draf ? '#fef3c7' : '#dcfce7') + ';border:1px solid ' + (draf ? '#fde68a' : '#bbf7d0') + ';',
-        jumlahTanggal: w.snapshots.length,
-        adaPerubahanTerakhir: pt > 0,
-        perubahanTerakhirStr: pt + ' field berubah',
         onLihat: () => this.bukaRiwayat(w.id),
         onEdit: () => this.mulaiEdit(w.id),
         onHover: e => {
@@ -3050,6 +3107,11 @@ Object.assign(Component.prototype, {
       onSimpanDraf: () => this.konfirmasiSimpan('draft'),
       onFinalisasi: () => this.konfirmasiSimpan('final'),
       onBatal: () => this.onBatal(),
+      onKeluarTanpaSimpan: () => this.keluarTanpaSimpan(),
+      onSort: col => this.onSort(col),
+      sortBy: st.sortBy,
+      sortDir: st.sortDir,
+      loading: st.loading,
       riwayatWarga: riwayatWarga,
       snapshotList: snapshotList,
       selectedSnap: selectedSnap || {
@@ -3085,6 +3147,7 @@ Object.assign(Component.prototype, {
   },
   renderLogin() {
     const lf = this.state.loginForm;
+    const isLoading = this.state.loading;
     const inpL = 'width:100%;padding:11px 13px;border:1.5px solid #e0e0de;border-radius:9px;font-family:inherit;font-size:14px;color:#18191f;background:#fafaf9;';
     const labL = 'display:block;font-size:12px;font-weight:600;color:#52576b;margin-bottom:6px;';
     const demo = [{
@@ -3140,8 +3203,11 @@ Object.assign(Component.prototype, {
       style: css('font-size:12.5px; font-weight:600; color:#b91c1c; background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; padding:9px 12px;')
     }, lf.error), /*#__PURE__*/React.createElement("button", {
       type: "submit",
-      style: css('padding:12px; font-family:inherit; font-size:14px; font-weight:700; border:none; background:#1e50d0; color:#fff; border-radius:9px; cursor:pointer; margin-top:2px;')
-    }, "Masuk")), /*#__PURE__*/React.createElement("div", {
+      disabled: isLoading,
+      style: css('padding:12px; font-family:inherit; font-size:14px; font-weight:700; border:none; background:' + (isLoading ? '#93b4ef' : '#1e50d0') + '; color:#fff; border-radius:9px; cursor:' + (isLoading ? 'not-allowed' : 'pointer') + '; margin-top:2px; display:flex; align-items:center; justify-content:center; gap:8px;')
+    }, isLoading && /*#__PURE__*/React.createElement("span", {
+      style: css('width:16px;height:16px;border:2px solid rgba(255,255,255,0.4);border-top-color:#fff;border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block;')
+    }), isLoading ? 'Memuat…' : 'Masuk')), /*#__PURE__*/React.createElement("div", {
       style: css('background:#fff; border-radius:14px; padding:16px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);')
     }, /*#__PURE__*/React.createElement("div", {
       style: css('font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:10px;')
@@ -3225,7 +3291,9 @@ Object.assign(Component.prototype, {
       style: css('color:' + ORANGE + ';')
     }, " *") : null, o.hint ? /*#__PURE__*/React.createElement("div", {
       style: css('color:' + ORANGE + ';font-style:italic;font-size:11px;font-weight:600;margin-top:3px;')
-    }, o.hint) : null), /*#__PURE__*/React.createElement("div", null, control));
+    }, o.hint) : null), /*#__PURE__*/React.createElement("div", null, control, o.error && /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:11.5px;color:#b91c1c;font-weight:600;margin-top:5px;padding:4px 9px;background:#fef2f2;border-radius:6px;border-left:3px solid #fca5a5;')
+    }, o.error)));
   },
   // Item Ya/Tidak (R38 disabilitas a–f, R39 keluhan kesehatan a–r).
   yt(path, label, value) {
@@ -3255,6 +3323,10 @@ Object.assign(Component.prototype, {
     val.galat.forEach(g => {
       gB[g.blok] = (gB[g.blok] || 0) + 1;
     });
+    const errMap = {};
+    val.galat.forEach(g => {
+      if (g.path && !errMap[g.path]) errMap[g.path] = g.label;
+    });
     const lab = 'display:block;font-size:12.5px;font-weight:600;color:#3d4152;margin-bottom:6px;';
     const inp = 'width:100%;padding:9px 11px;border:1.5px solid #e0e0de;border-radius:8px;font-family:inherit;font-size:13.5px;color:#18191f;background:#fff;';
     const fld = (d, scope) => this.field({
@@ -3265,7 +3337,8 @@ Object.assign(Component.prototype, {
       opts: d.opts,
       req: d.req,
       hint: d.hint,
-      value: getPath(scope || k, d.p)
+      value: getPath(scope || k, d.p),
+      error: errMap[d.p]
     });
     const fields = arr => arr.filter(d => !d.when || d.when(k)).map(d => fld(d));
     const sub = t => /*#__PURE__*/React.createElement("div", {
@@ -3524,7 +3597,7 @@ Object.assign(Component.prototype, {
           style: css('font-size:13.5px;font-weight:800;color:#18191f;')
         }, open ? '▾' : '▸', " ", i + 1, ". ", a.nama || '(anggota baru)'), /*#__PURE__*/React.createElement("span", {
           style: css('font-size:11.5px;color:#9ba2b6;')
-        }, a.hubungan || '—', " · ", a.jk || '—')), k.anggota.length > 1 && /*#__PURE__*/React.createElement("button", {
+        }, a.hubungan || '—', " · ", a.jk || '—')), i > 0 && k.anggota.length > 1 && /*#__PURE__*/React.createElement("button", {
           onClick: () => this.hapusAnggota(i),
           style: css('flex:none;font-size:11.5px;font-weight:700;color:#b91c1c;background:#fef2f2;border:1px solid #f3c9c9;border-radius:7px;padding:5px 10px;cursor:pointer;font-family:inherit;')
         }, "Hapus"));
@@ -3541,15 +3614,41 @@ Object.assign(Component.prototype, {
           style: css('font-size:11px;color:#9ba2b6;margin-bottom:4px;')
         }, "R24. Nomor Urut Anggota: ", /*#__PURE__*/React.createElement("strong", {
           style: css('color:#52576b;')
-        }, a.no || i + 1)), ANGGOTA_FIELDS.filter(d => !d.when || d.when(k, a)).map(d => this.field({
-          p: base + d.rp,
-          r: d.r,
-          label: d.label,
-          type: d.type,
-          opts: d.opts,
-          req: d.req,
-          value: a[d.rp]
-        })), /*#__PURE__*/React.createElement("div", {
+        }, a.no || i + 1)), i === 0 && /*#__PURE__*/React.createElement("div", {
+          style: css('font-size:11.5px;color:#1e50d0;background:#eef2fc;border:1px solid #c7d7f6;border-radius:8px;padding:8px 12px;margin-bottom:4px;')
+        }, "ℹ Nama dan NIK disinkronkan otomatis dari Blok I. Edit di Blok I untuk mengubahnya."), ANGGOTA_FIELDS.filter(d => !d.when || d.when(k, a)).map(d => {
+          if (i === 0 && (d.rp === 'nama' || d.rp === 'nik')) {
+            const err = errMap[base + d.rp];
+            return /*#__PURE__*/React.createElement("div", {
+              key: d.rp,
+              style: css('display:grid;grid-template-columns:minmax(150px,38%) 1fr;gap:18px;align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;')
+            }, /*#__PURE__*/React.createElement("div", {
+              style: css('font-size:13px;font-weight:600;color:#2c3442;padding-top:7px;')
+            }, /*#__PURE__*/React.createElement("span", {
+              style: css('color:#b0b5c2;font-weight:700;margin-right:6px;')
+            }, d.r, "."), d.label, d.req ? /*#__PURE__*/React.createElement("span", {
+              style: css('color:' + ORANGE + ';')
+            }, " *") : null), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+              style: css('display:flex;align-items:center;gap:8px;padding:9px 11px;background:#f7f7f5;border:1.5px solid #e0e0de;border-radius:8px;')
+            }, /*#__PURE__*/React.createElement("span", {
+              style: css('font-size:13.5px;color:#3d4152;flex:1;')
+            }, a[d.rp] || '—'), /*#__PURE__*/React.createElement("span", {
+              style: css('font-size:10.5px;color:#9ba2b6;white-space:nowrap;')
+            }, "🔒 Blok I")), err && /*#__PURE__*/React.createElement("div", {
+              style: css('font-size:11.5px;color:#b91c1c;font-weight:600;margin-top:5px;padding:4px 9px;background:#fef2f2;border-radius:6px;border-left:3px solid #fca5a5;')
+            }, err)));
+          }
+          return this.field({
+            p: base + d.rp,
+            r: d.r,
+            label: d.label,
+            type: d.type,
+            opts: d.opts,
+            req: d.req,
+            value: a[d.rp],
+            error: errMap[base + d.rp]
+          });
+        }), /*#__PURE__*/React.createElement("div", {
           style: css('display:grid;grid-template-columns:minmax(150px,38%) 1fr;gap:18px;align-items:start;padding:13px 0;border-bottom:1px solid #f4f4f2;')
         }, /*#__PURE__*/React.createElement("div", {
           style: css('font-size:13px;font-weight:600;color:#2c3442;padding-top:7px;')
@@ -3743,7 +3842,33 @@ Object.assign(Component.prototype, {
       onClick: V.canFinalize ? V.onFinalisasi : undefined,
       disabled: !V.canFinalize,
       style: css('padding:11px 22px;font-family:inherit;font-size:13.5px;font-weight:700;border:none;border-radius:9px;color:#fff;background:' + (V.canFinalize ? '#16a34a' : '#cbd5e1') + ';cursor:' + (V.canFinalize ? 'pointer' : 'not-allowed') + ';')
-    }, "Submit / Finalisasi")))), V.confirmModal && /*#__PURE__*/React.createElement("div", {
+    }, "Submit / Finalisasi")))), V.confirmModal && V.confirmModal.type === 'batal' && /*#__PURE__*/React.createElement("div", {
+      onClick: () => V.onBatalKonfirmasi(),
+      style: css('position:fixed;inset:0;z-index:90;background:rgba(15,18,28,0.45);display:flex;align-items:center;justify-content:center;padding:20px;animation:fadein 0.15s ease;')
+    }, /*#__PURE__*/React.createElement("div", {
+      onClick: e => e.stopPropagation(),
+      style: css('background:#fff;border-radius:16px;width:100%;max-width:420px;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid #f0f0ee;')
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:16px;font-weight:800;color:#18191f;')
+    }, "Keluar dari Kuesioner?"), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:12px;color:#9ba2b6;margin-top:2px;')
+    }, "Perubahan yang belum disimpan akan hilang")), /*#__PURE__*/React.createElement("button", {
+      onClick: () => V.onBatalKonfirmasi(),
+      style: css('width:30px;height:30px;border-radius:8px;border:none;background:#f3f3f2;color:#52576b;font-size:16px;cursor:pointer;')
+    }, "×")), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;flex-direction:column;gap:8px;padding:18px 20px;')
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => V.onBatalKonfirmasi(),
+      style: css('text-align:left;padding:12px 16px;border-radius:10px;border:1.5px solid #e0e0de;background:#fff;font-family:inherit;font-size:13.5px;font-weight:600;color:#3d4152;cursor:pointer;')
+    }, "Tetap di sini"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => this.simpanKeluarga('draft'),
+      style: css('text-align:left;padding:12px 16px;border-radius:10px;border:1.5px solid #f3cba8;background:' + ORANGE_BG + ';font-family:inherit;font-size:13.5px;font-weight:700;color:' + ORANGE + ';cursor:pointer;')
+    }, "Simpan sebagai Draf & Keluar"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => V.onKeluarTanpaSimpan(),
+      style: css('text-align:left;padding:12px 16px;border-radius:10px;border:1.5px solid #fca5a5;background:#fef2f2;font-family:inherit;font-size:13.5px;font-weight:700;color:#b91c1c;cursor:pointer;')
+    }, "Keluar Tanpa Menyimpan")))), V.confirmModal && V.confirmModal.type !== 'batal' && /*#__PURE__*/React.createElement("div", {
       onClick: () => V.onBatalKonfirmasi(),
       style: css('position:fixed;inset:0;z-index:90;background:rgba(15,18,28,0.45);display:flex;align-items:center;justify-content:center;padding:20px;animation:fadein 0.15s ease;')
     }, /*#__PURE__*/React.createElement("div", {
@@ -3922,15 +4047,23 @@ Object.assign(Component.prototype, {
       title: "Keluar",
       style: css('font-size:12px; font-weight:600; color:#b91c1c; background:#fff; border:1px solid #f0c9c9; padding:6px 11px; border-radius:7px; cursor:pointer; white-space:nowrap;')
     }, "Keluar"))), /*#__PURE__*/React.createElement("div", {
-      style: css('position:sticky; top:58px; z-index:29; background:#fff; border-bottom:1px solid #e8e8e6; overflow-x:auto; -webkit-overflow-scrolling:touch;')
+      style: css('flex:1; display:flex; overflow:hidden;')
+    }, !V.isForm && /*#__PURE__*/React.createElement("aside", {
+      style: css('width:220px; flex:none; position:sticky; top:58px; align-self:flex-start; max-height:calc(100vh - 58px); overflow-y:auto; background:#fff; border-right:1px solid #e8e8e6; padding:14px 12px; display:flex; flex-direction:column; gap:6px;')
     }, /*#__PURE__*/React.createElement("div", {
-      style: css('display:flex; min-width:max-content; padding:0 20px;')
-    }, V.navItems.map((item, i) => /*#__PURE__*/React.createElement("button", {
+      style: css('padding:4px 4px 14px; border-bottom:1px solid #f0f0ee; margin-bottom:4px;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:14px; font-weight:800; color:#18191f;')
+    }, "DTSEN Desa"), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:11px; color:#9ba2b6; margin-top:2px;')
+    }, V.namaDesa)), V.navItems.map((item, i) => /*#__PURE__*/React.createElement("button", {
       key: i,
       onClick: item.onClick,
       style: css(item.style)
-    }, item.label)))), /*#__PURE__*/React.createElement("main", {
-      style: css('flex:1; padding:24px 20px; max-width:1200px; width:100%; margin:0 auto;')
+    }, /*#__PURE__*/React.createElement("span", null, item.label), item.badge > 0 && /*#__PURE__*/React.createElement("span", {
+      style: css('background:#dc2626;color:#fff;border-radius:8px;padding:1px 7px;font-size:10px;font-weight:800;min-width:18px;text-align:center;')
+    }, item.badge)))), /*#__PURE__*/React.createElement("main", {
+      style: css('flex:1; min-width:0; padding:24px 20px; max-width:1200px; margin:0 auto; overflow-x:hidden;')
     }, V.isDashboard && /*#__PURE__*/React.createElement("div", {
       style: css('display:flex; flex-direction:column; gap:20px; animation:fadein 0.2s ease;')
     }, /*#__PURE__*/React.createElement("div", {
@@ -4054,82 +4187,85 @@ Object.assign(Component.prototype, {
     }, opt.label))), V.canCrud && /*#__PURE__*/React.createElement("button", {
       onClick: V.onTambah,
       style: css('display:inline-flex; align-items:center; gap:6px; padding:10px 16px; font-family:inherit; font-size:13.5px; font-weight:700; background:#1e50d0; color:#fff; border:none; border-radius:9px; cursor:pointer; white-space:nowrap;')
-    }, "+ Tambah Data")), /*#__PURE__*/React.createElement("div", {
-      style: css('background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05); overflow-x:auto;')
-    }, /*#__PURE__*/React.createElement("table", {
-      style: css('width:100%; border-collapse:collapse; min-width:720px;')
-    }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
-      style: css('background:#fafaf9; border-bottom:1px solid #eeeeed;')
-    }, /*#__PURE__*/React.createElement("th", {
-      style: css(th)
-    }, "Kepala Keluarga"), /*#__PURE__*/React.createElement("th", {
-      style: css(th)
-    }, "Alamat"), /*#__PURE__*/React.createElement("th", {
-      style: css(th)
-    }, "Pekerjaan"), /*#__PURE__*/React.createElement("th", {
-      style: css(th)
-    }, "Desil"), /*#__PURE__*/React.createElement("th", {
-      style: css(th)
-    }, "Bansos"), /*#__PURE__*/React.createElement("th", {
-      style: css(th)
-    }, "Riwayat"), /*#__PURE__*/React.createElement("th", {
-      style: css('text-align:right; padding:12px 16px; font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.06em;')
-    }, "Aksi"))), /*#__PURE__*/React.createElement("tbody", null, V.wargaTampil.map((w, i) => /*#__PURE__*/React.createElement("tr", {
-      key: w.id,
-      style: css('border-top:1px solid #f0f0ee;transition:background 0.12s;'),
-      onMouseEnter: w.onHover,
-      onMouseLeave: w.onLeave
-    }, /*#__PURE__*/React.createElement("td", {
-      style: css('padding:13px 16px; vertical-align:middle;')
-    }, /*#__PURE__*/React.createElement("div", {
-      style: css('display:flex; align-items:center; gap:7px;')
-    }, /*#__PURE__*/React.createElement("span", {
-      style: css('font-size:13.5px; font-weight:700; color:#18191f;')
-    }, w.nama), /*#__PURE__*/React.createElement("span", {
-      style: css(w.statusBadgeStyle)
-    }, w.statusLabel)), /*#__PURE__*/React.createElement("div", {
-      style: css('font-size:11px; color:#9ba2b6; margin-top:2px; font-variant-numeric:tabular-nums;')
-    }, w.nik)), /*#__PURE__*/React.createElement("td", {
-      style: css('padding:13px 16px; vertical-align:middle;')
-    }, /*#__PURE__*/React.createElement("div", {
-      style: css('font-size:13px; font-weight:600; color:#3d4152;')
-    }, w.rtRw), /*#__PURE__*/React.createElement("div", {
-      style: css('font-size:11px; color:#9ba2b6; margin-top:2px;')
-    }, w.dusun), /*#__PURE__*/React.createElement("div", {
-      style: css('font-size:11px; color:#9ba2b6; margin-top:1px;')
-    }, w.desa)), /*#__PURE__*/React.createElement("td", {
-      style: css('padding:13px 16px; vertical-align:middle;')
-    }, /*#__PURE__*/React.createElement("div", {
-      style: css('font-size:13px; font-weight:600; color:#3d4152;')
-    }, w.pekerjaan), /*#__PURE__*/React.createElement("div", {
-      style: css('font-size:11px; color:#9ba2b6; margin-top:2px; font-variant-numeric:tabular-nums;')
-    }, w.penghasilan)), /*#__PURE__*/React.createElement("td", {
-      style: css('padding:13px 16px; vertical-align:middle;')
-    }, /*#__PURE__*/React.createElement("span", {
-      style: css(w.desilBadgeStyle)
-    }, w.desilLabel)), /*#__PURE__*/React.createElement("td", {
-      style: css('padding:13px 16px; vertical-align:middle;')
-    }, /*#__PURE__*/React.createElement("span", {
-      style: css(w.bansosBadgeStyle)
-    }, w.bansos)), /*#__PURE__*/React.createElement("td", {
-      style: css('padding:13px 16px; vertical-align:middle;')
-    }, /*#__PURE__*/React.createElement("div", {
-      style: css('font-size:12px; font-weight:600; color:#3d4152;')
-    }, w.jumlahTanggal, " snapshot"), w.adaPerubahanTerakhir && /*#__PURE__*/React.createElement("div", {
-      style: css('font-size:11px; color:#b45309; font-weight:700; margin-top:2px;')
-    }, w.perubahanTerakhirStr)), /*#__PURE__*/React.createElement("td", {
-      style: css('padding:13px 16px; vertical-align:middle;')
-    }, /*#__PURE__*/React.createElement("div", {
-      style: css('display:flex; gap:6px; justify-content:flex-end;')
-    }, /*#__PURE__*/React.createElement("button", {
-      onClick: w.onLihat,
-      style: css('padding:7px 12px; font-family:inherit; font-size:12px; font-weight:600; border:1.5px solid #e0e0de; background:#fff; color:#3d4152; border-radius:8px; cursor:pointer;')
-    }, "Riwayat"), V.canCrud && /*#__PURE__*/React.createElement("button", {
-      onClick: w.onEdit,
-      style: css('padding:7px 12px; font-family:inherit; font-size:12px; font-weight:600; border:none; background:#1e50d0; color:#fff; border-radius:8px; cursor:pointer;')
-    }, "Edit"))))))), V.kosong && /*#__PURE__*/React.createElement("div", {
-      style: css('padding:40px; text-align:center; color:#9ba2b6; font-size:13.5px;')
-    }, "Tidak ada rumah tangga yang cocok.")), /*#__PURE__*/React.createElement("span", {
+    }, "+ Tambah Data")), (() => {
+      const Th = ({
+        col,
+        label,
+        right
+      }) => {
+        const sorted = V.sortBy === col;
+        const asc = V.sortDir === 'asc';
+        const base = th + (right ? 'text-align:right;' : '') + 'cursor:pointer;user-select:none;';
+        return /*#__PURE__*/React.createElement("th", {
+          onClick: () => V.onSort(col),
+          style: css(base)
+        }, label, " ", /*#__PURE__*/React.createElement("span", {
+          style: css('color:' + (sorted ? '#1e50d0' : '#c4c8d4') + ';')
+        }, sorted ? asc ? '↑' : '↓' : '↕'));
+      };
+      return /*#__PURE__*/React.createElement("div", {
+        style: css('background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05); overflow-x:auto;')
+      }, /*#__PURE__*/React.createElement("table", {
+        style: css('width:100%; border-collapse:collapse; min-width:500px;')
+      }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
+        style: css('background:#fafaf9; border-bottom:1px solid #eeeeed;')
+      }, /*#__PURE__*/React.createElement(Th, {
+        col: "nama",
+        label: "Kepala Keluarga"
+      }), /*#__PURE__*/React.createElement(Th, {
+        col: "dusun",
+        label: "Banjar"
+      }), /*#__PURE__*/React.createElement(Th, {
+        col: "desil",
+        label: "Desil"
+      }), /*#__PURE__*/React.createElement(Th, {
+        col: "bansos",
+        label: "Bansos"
+      }), /*#__PURE__*/React.createElement("th", {
+        style: css('text-align:right; padding:12px 16px; font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.06em;')
+      }, "Aksi"))), /*#__PURE__*/React.createElement("tbody", null, V.wargaTampil.map((w, i) => /*#__PURE__*/React.createElement("tr", {
+        key: w.id,
+        style: css('border-top:1px solid #f0f0ee;transition:background 0.12s;'),
+        onMouseEnter: w.onHover,
+        onMouseLeave: w.onLeave
+      }, /*#__PURE__*/React.createElement("td", {
+        style: css('padding:12px 16px; vertical-align:middle;')
+      }, /*#__PURE__*/React.createElement("div", {
+        style: css('display:flex; align-items:center; gap:7px;')
+      }, /*#__PURE__*/React.createElement("span", {
+        style: css('font-size:13.5px; font-weight:700; color:#18191f;')
+      }, w.nama), /*#__PURE__*/React.createElement("span", {
+        style: css(w.statusBadgeStyle)
+      }, w.statusLabel)), /*#__PURE__*/React.createElement("div", {
+        style: css('font-size:11px; color:#9ba2b6; margin-top:2px; font-variant-numeric:tabular-nums;')
+      }, w.nik)), /*#__PURE__*/React.createElement("td", {
+        style: css('padding:12px 16px; vertical-align:middle;')
+      }, /*#__PURE__*/React.createElement("div", {
+        style: css('font-size:13px; font-weight:600; color:#3d4152;')
+      }, w.dusun.replace('Banjar Dinas ', ''))), /*#__PURE__*/React.createElement("td", {
+        style: css('padding:12px 16px; vertical-align:middle;')
+      }, /*#__PURE__*/React.createElement("span", {
+        style: css(w.desilBadgeStyle)
+      }, w.desilLabel)), /*#__PURE__*/React.createElement("td", {
+        style: css('padding:12px 16px; vertical-align:middle;')
+      }, /*#__PURE__*/React.createElement("span", {
+        style: css(w.bansosBadgeStyle)
+      }, w.bansos)), /*#__PURE__*/React.createElement("td", {
+        style: css('padding:12px 16px; vertical-align:middle; text-align:right;')
+      }, /*#__PURE__*/React.createElement("div", {
+        style: css('display:inline-flex; gap:5px;')
+      }, /*#__PURE__*/React.createElement("button", {
+        onClick: w.onLihat,
+        title: "Lihat Riwayat",
+        style: css('width:32px;height:32px;border:1.5px solid #e0e0de;background:#fff;color:#3d4152;border-radius:8px;cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;')
+      }, "⊚"), V.canCrud && /*#__PURE__*/React.createElement("button", {
+        onClick: w.onEdit,
+        title: "Edit Data",
+        style: css('width:32px;height:32px;border:none;background:#1e50d0;color:#fff;border-radius:8px;cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;')
+      }, "✎"))))))), V.kosong && /*#__PURE__*/React.createElement("div", {
+        style: css('padding:40px; text-align:center; color:#9ba2b6; font-size:13.5px;')
+      }, "Tidak ada rumah tangga yang cocok."));
+    })(), /*#__PURE__*/React.createElement("span", {
       style: css('font-size:12px; color:#9ba2b6;')
     }, "Menampilkan ", V.jumlahTampil, " dari ", V.jumlahTotal, " rumah tangga")), V.isForm && V.form && this.renderForm(V), V.isRiwayat && V.riwayatWarga && /*#__PURE__*/React.createElement("div", {
       style: css('display:flex; flex-direction:column; gap:14px; animation:fadein 0.2s ease;')
@@ -4386,9 +4522,17 @@ Object.assign(Component.prototype, {
       style: css('padding:8px 16px; font-family:inherit; font-size:12.5px; font-weight:700; border:none; background:#1e50d0; color:#fff; border-radius:8px; cursor:pointer;')
     }, "Proses & Beri Keputusan")))), V.sgKosong && /*#__PURE__*/React.createElement("div", {
       style: css('background:#fff; border-radius:14px; padding:48px; text-align:center; color:#9ba2b6; font-size:13.5px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);')
-    }, "Tidak ada sanggahan yang cocok dengan filter."))), V.toast && /*#__PURE__*/React.createElement("div", {
+    }, "Tidak ada sanggahan yang cocok dengan filter.")))), V.toast && /*#__PURE__*/React.createElement("div", {
       style: css(V.toastStyle)
-    }, V.toast.msg));
+    }, V.toast.msg), V.loading && /*#__PURE__*/React.createElement("div", {
+      style: css('position:fixed;inset:0;z-index:100;background:rgba(15,18,28,0.4);display:flex;align-items:center;justify-content:center;animation:fadein 0.15s ease;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('background:#fff;border-radius:16px;padding:28px 40px;display:flex;flex-direction:column;align-items:center;gap:16px;box-shadow:0 20px 60px rgba(0,0,0,0.3);')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('width:40px;height:40px;border:4px solid #e8e8e6;border-top-color:#1e50d0;border-radius:50%;animation:spin 0.7s linear infinite;')
+    }), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:14px;font-weight:600;color:#52576b;')
+    }, "Memuat…"))));
   }
 });
 const root = ReactDOM.createRoot(document.getElementById('root'));

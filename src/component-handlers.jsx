@@ -9,11 +9,12 @@ Object.assign(Component.prototype, {
   onFilter(e){ const k=e.target.getAttribute('data-filter'); const o={}; o[k]=e.target.value; this.setState(o); },
   onTambah(){ if(!this.canCrud()) return; this.setState({form:this.blankForm(),editId:null,view:'form'}); },
   mulaiEdit(id){ if(!this.canCrud()) return; const w=this.state.warga.find(x=>x.id===id); this.setState({form:this.dataToForm(w),editId:id,view:'form'}); },
-  onBatal(){ this.setState({form:null,editId:null,view:this.state.selectedId?'riwayat':'daftar',confirmModal:null}); },
+  onBatal(){ this.setState({confirmModal:{type:'batal'}}); },
+  keluarTanpaSimpan(){ this.setState({form:null,editId:null,view:this.state.selectedId?'riwayat':'daftar',confirmModal:null}); },
 
   // -- Handler form FASIH (nested path) ----------------------------------------
   onFormField(e){ this.setForm(e.target.getAttribute('data-path'), e.target.value); },
-  setForm(path,val){ this.setState(s=>({form:setPath(s.form,path,val)})); },
+  setForm(path,val){ this.setState(s=>{ let f=setPath(s.form,path,val); if(path==='nama') f=setPath(f,'anggota.0.nama',val); if(path==='nik') f=setPath(f,'anggota.0.nik',val); return {form:f}; }); },
   toggleOpenAnggota(i){ this.setState(s=>({form:setPath(s.form,'_openIdx', s.form._openIdx===i?-1:i)})); },
   tambahAnggota(){ if(!this.canCrud()) return; this.setState(s=>{ const ang=s.form.anggota.slice(); ang.push(this.mkAnggota({no:ang.length+1,hubungan:'3. Anak'})); let f=setPath(s.form,'anggota',ang); return {form:setPath(f,'_openIdx',ang.length-1)}; }); },
   hapusAnggota(i){ if(!this.canCrud()) return;
@@ -153,6 +154,7 @@ Object.assign(Component.prototype, {
   bukaRiwayat(id){ const w=this.state.warga.find(x=>x.id===id); const last=w.snapshots[w.snapshots.length-1].tanggal; this.setState({view:'riwayat',selectedId:id,selectedTanggal:last,showSanggahanForm:false}); },
   pilihTanggal(t){ this.setState({selectedTanggal:t,showSanggahanForm:false}); },
   onKembali(){ this.setState({view:'daftar',selectedId:null,selectedTanggal:null,showSanggahanForm:false}); },
+  onSort(col){ this.setState(s=>({sortBy:col,sortDir:s.sortBy===col&&s.sortDir==='asc'?'desc':'asc'})); },
   autoClear(){ clearTimeout(this._t); this._t=setTimeout(()=>this.setState({toast:null}),3600); },
 
   // Simpan keluarga. status='draft' selalu boleh (tersimpan langsung ke
@@ -165,7 +167,7 @@ Object.assign(Component.prototype, {
       const v=this.validateKeluarga(f);
       if(v.galat.length>0){ this.setState({toast:{type:'err',msg:'Belum bisa difinalisasi: masih ada '+v.galat.length+' GALAT yang harus diperbaiki.'}}); this.autoClear(); return; }
     }
-    const today=this.state.today, operator=this.opName();
+    const today=new Date().toISOString().slice(0,10), operator=this.opName();
     const summary=this.deriveSummary(f);
     const foto=Object.assign({},(f.rumah&&f.rumah.foto)||this.emptyFoto());
     const struct=JSON.parse(JSON.stringify(f)); delete struct.isNew; delete struct._openIdx; delete struct._activeBlok; delete struct._showRingkasan;
