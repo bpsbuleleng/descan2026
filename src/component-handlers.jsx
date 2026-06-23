@@ -168,18 +168,21 @@ Object.assign(Component.prototype, {
       if(v.galat.length>0){ this.setState({toast:{type:'err',msg:'Belum bisa difinalisasi: masih ada '+v.galat.length+' GALAT yang harus diperbaiki.'}}); this.autoClear(); return; }
     }
     const today=todayWITA(), operator=this.opName();
+    const fId=f.id||('w'+Date.now());
     const summary=this.deriveSummary(f);
     const foto=Object.assign({},(f.rumah&&f.rumah.foto)||this.emptyFoto());
     const struct=JSON.parse(JSON.stringify(f)); delete struct.isNew; delete struct._openIdx; delete struct._activeBlok; delete struct._showRingkasan;
-    const identity={id:f.id,noKK:f.noKK,nik:f.nik,nama:f.nama,desa:f.desa,dusun:f.dusun,rt:f.rt,rw:f.rw,alamat:f.alamat};
+    const identity={id:fId,noKK:f.noKK,nik:f.nik,nama:f.nama,desa:f.desa,dusun:f.dusun,rt:f.rt,rw:f.rw,alamat:f.alamat};
     const base=Object.assign({},struct,identity,summary,{status:status,foto:foto,jumlahAnggotaKK:f.jumlahAnggotaKK||summary.jumlahAnggota,aset:struct.aset});
     this.setState(s=>{
-      const warga=s.warga.slice(); const idx=warga.findIndex(w=>w.id===f.id); const baru=idx<0;
+      const warga=s.warga.slice(); const idx=warga.findIndex(w=>w.id===fId); const baru=idx<0;
       if(baru){ warga.push(Object.assign({},base,{snapshots:[{tanggal:today,operator:operator,data:summary,foto:foto,fieldYangBerubah:[]}]})); }
       else {
         const w=warga[idx]; let snaps=w.snapshots.slice();
-        // Exclude today's snapshot (will be overwritten) so diff is always vs. previous save.
-        const before=snaps.filter(x=>x.tanggal!==today).sort((a,b)=>a.tanggal<b.tanggal?1:-1)[0];
+        // Compare against the most recent snapshot before today; if none (record created today),
+        // fall back to today's existing snapshot so same-day edits still produce a diff.
+        const prevDay=snaps.filter(x=>x.tanggal!==today).sort((a,b)=>a.tanggal<b.tanggal?1:-1)[0];
+        const before=prevDay||snaps.find(x=>x.tanggal===today);
         const diff=before?this.computeDiff(before.data,summary):[];
         const snap={tanggal:today,operator:operator,data:summary,foto:foto,fieldYangBerubah:diff};
         const si=snaps.findIndex(x=>x.tanggal===today);
@@ -189,8 +192,8 @@ Object.assign(Component.prototype, {
       }
       const lab=status==='final'?'difinalisasi (Final)':'disimpan sebagai draf';
       const msg=(baru?'Keluarga baru ':'Perubahan ')+lab+'. Snapshot '+this.formatTanggal(today)+'.';
-      return {warga:warga,view:'riwayat',selectedId:f.id,selectedTanggal:today,form:null,editId:null,confirmModal:null,toast:{type:'ok',msg:msg}};
-    },()=>{ const w=this.state.warga.find(x=>x.id===f.id); if(w) this.push('saveWarga',{warga:w}); });
+      return {warga:warga,view:'riwayat',selectedId:fId,selectedTanggal:today,form:null,editId:null,confirmModal:null,toast:{type:'ok',msg:msg}};
+    },()=>{ const w=this.state.warga.find(x=>x.id===fId); if(w&&w.id) this.push('saveWarga',{warga:w}); });
     this.autoClear();
   },
 

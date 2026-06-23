@@ -1983,6 +1983,7 @@ Object.assign(Component.prototype, {
   },
   dataToForm(w) {
     const clone = JSON.parse(JSON.stringify(w));
+    if (!clone.id) clone.id = 'w' + Date.now();
     // Migrate: if aset was corrupted to an array by an earlier save, rebuild object from array
     if (Array.isArray(clone.aset)) {
       const arr = clone.aset;
@@ -2536,6 +2537,7 @@ Object.assign(Component.prototype, {
     }
     const today = todayWITA(),
       operator = this.opName();
+    const fId = f.id || 'w' + Date.now();
     const summary = this.deriveSummary(f);
     const foto = Object.assign({}, f.rumah && f.rumah.foto || this.emptyFoto());
     const struct = JSON.parse(JSON.stringify(f));
@@ -2544,7 +2546,7 @@ Object.assign(Component.prototype, {
     delete struct._activeBlok;
     delete struct._showRingkasan;
     const identity = {
-      id: f.id,
+      id: fId,
       noKK: f.noKK,
       nik: f.nik,
       nama: f.nama,
@@ -2562,7 +2564,7 @@ Object.assign(Component.prototype, {
     });
     this.setState(s => {
       const warga = s.warga.slice();
-      const idx = warga.findIndex(w => w.id === f.id);
+      const idx = warga.findIndex(w => w.id === fId);
       const baru = idx < 0;
       if (baru) {
         warga.push(Object.assign({}, base, {
@@ -2577,8 +2579,10 @@ Object.assign(Component.prototype, {
       } else {
         const w = warga[idx];
         let snaps = w.snapshots.slice();
-        // Exclude today's snapshot (will be overwritten) so diff is always vs. previous save.
-        const before = snaps.filter(x => x.tanggal !== today).sort((a, b) => a.tanggal < b.tanggal ? 1 : -1)[0];
+        // Compare against the most recent snapshot before today; if none (record created today),
+        // fall back to today's existing snapshot so same-day edits still produce a diff.
+        const prevDay = snaps.filter(x => x.tanggal !== today).sort((a, b) => a.tanggal < b.tanggal ? 1 : -1)[0];
+        const before = prevDay || snaps.find(x => x.tanggal === today);
         const diff = before ? this.computeDiff(before.data, summary) : [];
         const snap = {
           tanggal: today,
@@ -2599,7 +2603,7 @@ Object.assign(Component.prototype, {
       return {
         warga: warga,
         view: 'riwayat',
-        selectedId: f.id,
+        selectedId: fId,
         selectedTanggal: today,
         form: null,
         editId: null,
@@ -2610,8 +2614,8 @@ Object.assign(Component.prototype, {
         }
       };
     }, () => {
-      const w = this.state.warga.find(x => x.id === f.id);
-      if (w) this.push('saveWarga', {
+      const w = this.state.warga.find(x => x.id === fId);
+      if (w && w.id) this.push('saveWarga', {
         warga: w
       });
     });
@@ -3000,8 +3004,8 @@ Object.assign(Component.prototype, {
           operator: 'oleh ' + sn.operator,
           desilLabel: 'Desil ' + sn.data.desil,
           desilStyle: 'display:inline-flex;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;color:' + ds2.text + ';background:' + ds2.bg + ';',
-          metaStr: awal ? 'Snapshot awal' : np > 0 ? np + ' field berubah' : 'Tidak ada perubahan',
-          metaStyle: 'font-size:11.5px;font-weight:700;color:' + (awal ? '#9ba2b6' : np > 0 ? '#b45309' : '#9ba2b6') + ';',
+          metaStr: awal && np === 0 ? 'Snapshot awal' : np > 0 ? np + ' field berubah' : 'Tidak ada perubahan',
+          metaStyle: 'font-size:11.5px;font-weight:700;color:' + (awal && np === 0 ? '#9ba2b6' : np > 0 ? '#b45309' : '#9ba2b6') + ';',
           onClick: () => this.pilihTanggal(sn.tanggal),
           rowStyle: 'display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;border:none;cursor:pointer;padding:12px 14px;border-radius:10px;font-family:inherit;background:' + (active ? '#eef2fc' : 'transparent') + ';border-left:3px solid ' + (active ? '#1e50d0' : 'transparent') + ';transition:background 0.15s,border-color 0.15s;'
         };
@@ -4328,7 +4332,7 @@ Object.assign(Component.prototype, {
       }, w.statusLabel)), /*#__PURE__*/React.createElement("div", {
         style: css('font-size:11px; color:#9ba2b6; margin-top:2px; font-variant-numeric:tabular-nums;')
       }, w.nik, /*#__PURE__*/React.createElement("span", {
-        style: css('margin-left:8px;color:#d4d4d0;')
+        style: css('margin-left:8px;color:#9ba2b6;')
       }, "· ", w.snapCount, " snp"))), /*#__PURE__*/React.createElement("td", {
         style: css('padding:12px 16px; vertical-align:middle;')
       }, /*#__PURE__*/React.createElement("div", {
@@ -4450,7 +4454,7 @@ Object.assign(Component.prototype, {
       style: css('color:#9ba2b6; font-weight:700;')
     }, "→"), /*#__PURE__*/React.createElement("span", {
       style: css('color:#16a34a; font-weight:700;')
-    }, d.ke))))), V.selectedSnap.snapAwal && /*#__PURE__*/React.createElement("div", {
+    }, d.ke))))), V.selectedSnap.snapAwal && !V.selectedSnap.adaPerubahan && /*#__PURE__*/React.createElement("div", {
       style: css('padding:12px 14px; background:#f7f7f5; border-radius:10px; font-size:12.5px; color:#52576b; line-height:1.5;')
     }, "Snapshot awal — belum ada pembanding sebelumnya."), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
       style: css('font-size:11px; font-weight:700; color:#9ba2b6; text-transform:uppercase; letter-spacing:0.05em; display:block; margin-bottom:9px;')

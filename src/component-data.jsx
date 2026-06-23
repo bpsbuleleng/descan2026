@@ -219,6 +219,7 @@ Object.assign(Component.prototype, {
   },
   dataToForm(w){
     const clone=JSON.parse(JSON.stringify(w));
+    if(!clone.id) clone.id='w'+Date.now();
     // Migrate: if aset was corrupted to an array by an earlier save, rebuild object from array
     if(Array.isArray(clone.aset)){
       const arr=clone.aset;

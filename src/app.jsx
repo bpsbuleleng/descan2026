@@ -81,8 +81,8 @@ Object.assign(Component.prototype, {
       snapshotList=sorted.map(sn=>{ const active=sn.tanggal===st.selectedTanggal; const ds2=this.getDS(sn.data.desil); const np=sn.fieldYangBerubah.length; const awal=sn.tanggal===earliest;
         return {tanggalStr:this.formatTanggal(sn.tanggal),operator:'oleh '+sn.operator,desilLabel:'Desil '+sn.data.desil,
           desilStyle:'display:inline-flex;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;color:'+ds2.text+';background:'+ds2.bg+';',
-          metaStr:awal?'Snapshot awal':(np>0?np+' field berubah':'Tidak ada perubahan'),
-          metaStyle:'font-size:11.5px;font-weight:700;color:'+(awal?'#9ba2b6':(np>0?'#b45309':'#9ba2b6'))+';',
+          metaStr:(awal&&np===0)?'Snapshot awal':(np>0?np+' field berubah':'Tidak ada perubahan'),
+          metaStyle:'font-size:11.5px;font-weight:700;color:'+((awal&&np===0)?'#9ba2b6':(np>0?'#b45309':'#9ba2b6'))+';',
           onClick:()=>this.pilihTanggal(sn.tanggal),
           rowStyle:'display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;border:none;cursor:pointer;padding:12px 14px;border-radius:10px;font-family:inherit;background:'+(active?'#eef2fc':'transparent')+';border-left:3px solid '+(active?'#1e50d0':'transparent')+';transition:background 0.15s,border-color 0.15s;'}; });
       const snap=rw.snapshots.find(s=>s.tanggal===st.selectedTanggal)||sorted[0];
@@ -722,7 +722,7 @@ Object.assign(Component.prototype, {
                         <tr key={w.id} style={css('border-top:1px solid #f0f0ee;transition:background 0.12s;')} onMouseEnter={w.onHover} onMouseLeave={w.onLeave}>
                           <td style={css('padding:12px 16px; vertical-align:middle;')}>
                             <div style={css('display:flex; align-items:center; gap:7px;')}><span style={css('font-size:13.5px; font-weight:700; color:#18191f;')}>{w.nama}</span><span style={css(w.statusBadgeStyle)}>{w.statusLabel}</span></div>
-                            <div style={css('font-size:11px; color:#9ba2b6; margin-top:2px; font-variant-numeric:tabular-nums;')}>{w.nik}<span style={css('margin-left:8px;color:#d4d4d0;')}>· {w.snapCount} snp</span></div>
+                            <div style={css('font-size:11px; color:#9ba2b6; margin-top:2px; font-variant-numeric:tabular-nums;')}>{w.nik}<span style={css('margin-left:8px;color:#9ba2b6;')}>· {w.snapCount} snp</span></div>
                           </td>
                           <td style={css('padding:12px 16px; vertical-align:middle;')}>
                             <div style={css('font-size:13px; font-weight:600; color:#3d4152;')}>{w.dusun.replace('Banjar Dinas ','')}</div>
@@ -824,7 +824,7 @@ Object.assign(Component.prototype, {
                       ))}
                     </div>
                   )}
-                  {V.selectedSnap.snapAwal && (
+                  {V.selectedSnap.snapAwal && !V.selectedSnap.adaPerubahan && (
                     <div style={css('padding:12px 14px; background:#f7f7f5; border-radius:10px; font-size:12.5px; color:#52576b; line-height:1.5;')}>Snapshot awal — belum ada pembanding sebelumnya.</div>
                   )}
                   <div>
