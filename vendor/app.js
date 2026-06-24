@@ -3414,11 +3414,6 @@ Object.assign(Component.prototype, {
     const inpL = 'width:100%;padding:11px 13px;border:1.5px solid #e0e0de;border-radius:9px;font-family:inherit;font-size:14px;color:#18191f;background:#fafaf9;';
     const labL = 'display:block;font-size:12px;font-weight:600;color:#52576b;margin-bottom:6px;';
     const demo = [{
-      r: 'Admin',
-      u: 'admin',
-      p: 'admin123',
-      note: 'Akses penuh + Kotak Saran'
-    }, {
       r: 'Kepala Desa',
       u: 'kepaladesa',
       p: 'desa123',
