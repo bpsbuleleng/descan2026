@@ -70,6 +70,9 @@ class Component extends React.Component {
     return null;
   }
   canCrud(){ const a=this.state.auth; return !!a&&(a.role==='Operator'||a.role==='Kepala Desa'); }
+  // Hak mengajukan sanggahan: semua peran yang sudah login (termasuk Kepala SLS),
+  // meski Kepala SLS tetap hanya-lihat untuk CRUD warga & pemrosesan sanggahan.
+  canSanggah(){ return !!this.state.auth; }
   // Warga yang boleh dilihat: Kepala SLS dibatasi ke wilayahnya, lainnya melihat semua.
   visibleWarga(){ const a=this.state.auth; const w=this.state.warga; return (a&&a.wilayah)?w.filter(x=>x.dusun===a.wilayah):w; }
   onLoginField(e){ const k=e.target.getAttribute('data-login'); const v=e.target.value; this.setState(s=>({loginForm:Object.assign({},s.loginForm,{[k]:v,error:''})})); }
@@ -108,6 +111,7 @@ class Component extends React.Component {
       warga:saved?saved.warga:this.seedWarga(), sanggahan:saved?saved.sanggahan:this.seedSanggahan(),
       form:null, editId:null, selectedId:null, selectedTanggal:null,
       showSanggahanForm:false, sanggahanForm:{pengaju:'',nik:'',hubungan:'Warga Bersangkutan',alasan:''},
+      showKritikModal:false, kritikForm:{nama:'',organisasi:'',isi:''},
       processingId:null, processCatatan:'',
       confirmModal:null, loading:false, sortBy:null, sortDir:'asc',
       isMobile:typeof window!=='undefined'&&window.innerWidth<768,

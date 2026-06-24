@@ -554,6 +554,11 @@ class Component extends React.Component {
     const a = this.state.auth;
     return !!a && (a.role === 'Operator' || a.role === 'Kepala Desa');
   }
+  // Hak mengajukan sanggahan: semua peran yang sudah login (termasuk Kepala SLS),
+  // meski Kepala SLS tetap hanya-lihat untuk CRUD warga & pemrosesan sanggahan.
+  canSanggah() {
+    return !!this.state.auth;
+  }
   // Warga yang boleh dilihat: Kepala SLS dibatasi ke wilayahnya, lainnya melihat semua.
   visibleWarga() {
     const a = this.state.auth;
@@ -705,6 +710,12 @@ class Component extends React.Component {
         nik: '',
         hubungan: 'Warga Bersangkutan',
         alasan: ''
+      },
+      showKritikModal: false,
+      kritikForm: {
+        nama: '',
+        organisasi: '',
+        isi: ''
       },
       processingId: null,
       processCatatan: '',
@@ -2687,7 +2698,7 @@ Object.assign(Component.prototype, {
     }));
   },
   onBukaFormSanggahan() {
-    if (!this.canCrud()) return;
+    if (!this.canSanggah()) return;
     this.setState({
       showSanggahanForm: true,
       sanggahanForm: {
@@ -2704,7 +2715,7 @@ Object.assign(Component.prototype, {
     });
   },
   onSubmitSanggahan() {
-    if (!this.canCrud()) return;
+    if (!this.canSanggah()) return;
     const f = this.state.sanggahanForm;
     if (!f.pengaju.trim() || !f.alasan.trim()) {
       this.setState({
@@ -2785,6 +2796,67 @@ Object.assign(Component.prototype, {
       catatanOperator: catatan,
       tanggalSelesai: tgl
     });
+  },
+  // -- Kritik & saran (tersedia di halaman login & sidebar, tanpa perlu hak CRUD) --
+  onBukaKritik() {
+    this.setState({
+      showKritikModal: true,
+      kritikForm: {
+        nama: '',
+        organisasi: '',
+        isi: ''
+      }
+    });
+  },
+  onTutupKritik() {
+    this.setState({
+      showKritikModal: false
+    });
+  },
+  onKritikChange(e) {
+    const k = e.target.getAttribute('data-kritik');
+    const v = e.target.value;
+    this.setState(s => ({
+      kritikForm: Object.assign({}, s.kritikForm, {
+        [k]: v
+      })
+    }));
+  },
+  onSubmitKritik() {
+    const f = this.state.kritikForm;
+    if (!f.isi || !f.isi.trim()) {
+      this.setState({
+        toast: {
+          type: 'err',
+          msg: 'Isi kritik/saran wajib diisi.'
+        }
+      });
+      this.autoClear();
+      return;
+    }
+    const kritik = {
+      id: 'k' + Date.now(),
+      nama: (f.nama || '').trim() || 'Anonim',
+      organisasi: (f.organisasi || '').trim() || '-',
+      isi: f.isi.trim(),
+      tanggal: this.state.today
+    };
+    this.setState({
+      showKritikModal: false,
+      kritikForm: {
+        nama: '',
+        organisasi: '',
+        isi: ''
+      },
+      toast: {
+        type: 'ok',
+        msg: 'Terima kasih! Kritik & saran Anda telah terkirim.'
+      }
+    });
+    this.push('submitKritik', {
+      kritik: kritik
+    });
+    this.autoClear();
   },
   hapusWarga(id) {
     if (!this.canCrud()) return;
@@ -3175,6 +3247,7 @@ Object.assign(Component.prototype, {
     return {
       auth: auth,
       canCrud: canCrud,
+      canSanggah: this.canSanggah(),
       roleLabel: auth ? auth.role : '',
       wilayahLabel: auth && auth.wilayah ? auth.wilayah : '',
       serverMode: this.serverMode(),
@@ -3354,9 +3427,76 @@ Object.assign(Component.prototype, {
       style: css('font-size:11px; color:#9ba2b6;')
     }, d.note)), /*#__PURE__*/React.createElement("span", {
       style: css('font-family:Menlo,monospace; font-size:11.5px; color:#52576b; background:#f5f5f2; padding:4px 9px; border-radius:7px; white-space:nowrap;')
-    }, d.u, " / ", d.p))))), /*#__PURE__*/React.createElement("div", {
+    }, d.u, " / ", d.p))))), /*#__PURE__*/React.createElement("button", {
+      onClick: () => this.onBukaKritik(),
+      style: css('display:flex;align-items:center;justify-content:center;gap:7px;padding:11px;font-family:inherit;font-size:13px;font-weight:700;border:1.5px solid #e0e0de;background:#fff;color:#3d4152;border-radius:10px;cursor:pointer;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:14px;')
+    }, "✎"), "Sampaikan Kritik & Saran"), /*#__PURE__*/React.createElement("div", {
       style: css('text-align:center; font-size:11px; font-weight:700; color:#92400e; letter-spacing:0.03em;')
-    }, "PROTOTYPE · autentikasi demo sisi-klien")));
+    }, "PROTOTYPE · autentikasi demo sisi-klien")), this.renderKritikModal());
+  },
+  // -- Modal Kritik & Saran (dipakai di halaman login & di dalam aplikasi) ------
+  // Memakai this.state langsung agar bisa dirender di kedua konteks (login & app).
+  renderKritikModal() {
+    if (!this.state.showKritikModal) return null;
+    const kf = this.state.kritikForm;
+    const lab = 'display:block;font-size:12px;font-weight:600;color:#52576b;margin-bottom:5px;';
+    const inp = 'width:100%;padding:9px 11px;border:1.5px solid #e0e0de;border-radius:8px;font-family:inherit;font-size:13.5px;color:#18191f;background:#fff;';
+    const opsional = /*#__PURE__*/React.createElement("span", {
+      style: css('color:#9ba2b6;font-weight:500;')
+    }, " (opsional)");
+    return /*#__PURE__*/React.createElement("div", {
+      onClick: () => this.onTutupKritik(),
+      style: css("position:fixed;inset:0;z-index:110;background:rgba(15,18,28,0.45);display:flex;align-items:center;justify-content:center;padding:20px;font-family:'Plus Jakarta Sans',system-ui,sans-serif;animation:fadein 0.15s ease;")
+    }, /*#__PURE__*/React.createElement("div", {
+      onClick: e => e.stopPropagation(),
+      style: css('background:#fff;border-radius:16px;padding:24px;width:100%;max-width:440px;display:flex;flex-direction:column;gap:13px;box-shadow:0 20px 60px rgba(0,0,0,0.3);')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;align-items:flex-start;justify-content:space-between;gap:10px;')
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:16px;font-weight:800;color:#18191f;letter-spacing:-0.01em;')
+    }, "Kritik & Saran"), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:12px;color:#9ba2b6;margin-top:3px;')
+    }, "Bantu kami meningkatkan layanan DTSEN Desa")), /*#__PURE__*/React.createElement("button", {
+      onClick: () => this.onTutupKritik(),
+      title: "Tutup",
+      style: css('flex:none;width:30px;height:30px;border-radius:8px;border:1px solid #e0e0de;background:#fafaf9;color:#52576b;font-size:17px;line-height:1;cursor:pointer;')
+    }, "×")), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Nama", opsional), /*#__PURE__*/React.createElement("input", {
+      "data-kritik": "nama",
+      value: kf.nama,
+      onChange: e => this.onKritikChange(e),
+      placeholder: "Nama Anda",
+      style: css(inp)
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Organisasi", opsional), /*#__PURE__*/React.createElement("input", {
+      "data-kritik": "organisasi",
+      value: kf.organisasi,
+      onChange: e => this.onKritikChange(e),
+      placeholder: "mis. Karang Taruna, BPD, RT/RW",
+      style: css(inp)
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("label", {
+      style: css(lab)
+    }, "Kritik / Saran ", /*#__PURE__*/React.createElement("span", {
+      style: css('color:' + ORANGE + ';')
+    }, "*")), /*#__PURE__*/React.createElement("textarea", {
+      "data-kritik": "isi",
+      value: kf.isi,
+      onChange: e => this.onKritikChange(e),
+      placeholder: "Tuliskan kritik atau saran Anda…",
+      style: css(inp + 'height:96px;resize:vertical;line-height:1.6;')
+    })), /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex;gap:8px;justify-content:flex-end;margin-top:2px;')
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => this.onTutupKritik(),
+      style: css('padding:9px 16px;font-family:inherit;font-size:13px;font-weight:600;border:1.5px solid #e0e0de;background:#fff;color:#3d4152;border-radius:8px;cursor:pointer;')
+    }, "Batal"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => this.onSubmitKritik(),
+      style: css('padding:9px 18px;font-family:inherit;font-size:13px;font-weight:700;border:none;background:#1e50d0;color:#fff;border-radius:8px;cursor:pointer;')
+    }, "Kirim"))));
   },
   // -- Render satu field FASIH (label kiri | kontrol kanan) ---------------------
   field(o) {
@@ -4286,7 +4426,14 @@ Object.assign(Component.prototype, {
       style: css(item.style)
     }, /*#__PURE__*/React.createElement("span", null, item.label), item.badge > 0 && /*#__PURE__*/React.createElement("span", {
       style: css('background:#dc2626;color:#fff;border-radius:8px;padding:1px 7px;font-size:10px;font-weight:800;min-width:18px;text-align:center;')
-    }, item.badge)))), /*#__PURE__*/React.createElement("main", {
+    }, item.badge))), /*#__PURE__*/React.createElement("div", {
+      style: css('margin-top:8px;padding-top:10px;border-top:1px solid #f0f0ee;')
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => this.onBukaKritik(),
+      style: css('width:100%;text-align:left;display:flex;align-items:center;gap:9px;padding:10px 14px;border:1px solid #e0e0de;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:#3d4152;background:#fafaf9;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:14px;')
+    }, "✎"), "Kritik & Saran"))), /*#__PURE__*/React.createElement("main", {
       style: css('flex:1; min-width:0; padding:' + (V.isMobile ? '12px' : '24px 20px') + '; max-width:1200px; margin:0 auto; overflow-x:hidden;' + (V.isMobile && !V.isForm ? ' padding-bottom:70px;' : ''))
     }, V.isDashboard && /*#__PURE__*/React.createElement("div", {
       style: css('display:flex; flex-direction:column; gap:20px; animation:fadein 0.2s ease;')
@@ -4632,7 +4779,7 @@ Object.assign(Component.prototype, {
       style: css('font-size:13px; font-weight:700; color:#18191f;')
     }, "Sanggahan Snapshot Ini"), /*#__PURE__*/React.createElement("span", {
       style: css('font-size:11.5px; color:#9ba2b6; margin-left:8px;')
-    }, V.selectedSnap.jumlahSanggahan)), V.canCrud && V.canAjukanSanggahan && /*#__PURE__*/React.createElement("button", {
+    }, V.selectedSnap.jumlahSanggahan)), V.canSanggah && V.canAjukanSanggahan && /*#__PURE__*/React.createElement("button", {
       onClick: V.onBukaFormSanggahan,
       style: css('padding:7px 13px; font-family:inherit; font-size:12.5px; font-weight:700; border:1.5px solid #1e50d0; background:#eef2fc; color:#1e50d0; border-radius:8px; cursor:pointer; white-space:nowrap;')
     }, "+ Ajukan Sanggahan")), V.sanggahanForSnap.map((sg, i) => /*#__PURE__*/React.createElement("div", {
@@ -4788,7 +4935,14 @@ Object.assign(Component.prototype, {
       }, item.label === 'Daftar Warga' ? 'Warga' : item.label === 'Sanggahan' ? 'Sanggah' : item.label), item.badge > 0 && /*#__PURE__*/React.createElement("span", {
         style: css('position:absolute;top:6px;right:calc(50% - 18px);min-width:14px;height:14px;padding:0 3px;border-radius:7px;background:#dc2626;color:#fff;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;')
       }, item.badge));
-    })), V.toast && /*#__PURE__*/React.createElement("div", {
+    }), /*#__PURE__*/React.createElement("button", {
+      onClick: () => this.onBukaKritik(),
+      style: css('flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:none;background:none;cursor:pointer;font-family:inherit;padding:0;border-top:2px solid transparent;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:18px;color:#9ba2b6;line-height:1;')
+    }, "✎"), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:10px;font-weight:500;color:#9ba2b6;white-space:nowrap;')
+    }, "Saran"))), this.renderKritikModal(), V.toast && /*#__PURE__*/React.createElement("div", {
       style: css(V.toastStyle)
     }, V.toast.msg), V.showScrollTop && /*#__PURE__*/React.createElement("button", {
       onClick: () => window.scrollTo({

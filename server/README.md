@@ -11,7 +11,7 @@ index.html (browser)
    │  fetch JSON (POST, text/plain)
    ▼
 Apps Script Web App  ──►  Google Spreadsheet (database)
-   doGet/doPost            Sheet: Users · Warga · Sanggahan · Meta
+   doGet/doPost            Sheet: Users · Warga · Sanggahan · Kritik · Meta
 ```
 
 - Database = satu Spreadsheet, satu baris = satu KK / satu sanggahan.
@@ -19,7 +19,10 @@ Apps Script Web App  ──►  Google Spreadsheet (database)
   Foto (base64) **tidak** disimpan ke sheet (batas 50.000 karakter/sel) — foto
   tetap di perangkat. Untuk foto terpusat, gunakan Google Drive (pengembangan lanjut).
 - Aturan akses dipaksakan di server: **Operator & Kepala Desa** boleh tulis;
-  **Kepala SLS** hanya-baca, dibatasi ke wilayah (banjar dinas)-nya.
+  **Kepala SLS** hanya-baca (dibatasi ke wilayah/banjar dinas-nya), **namun boleh
+  mengajukan sanggahan** (`submitSanggahan` cukup butuh login, bukan hak tulis penuh).
+- **Kritik & saran** (`submitKritik`) boleh dikirim **tanpa login** — tersedia di
+  halaman login & sidebar; disimpan ke sheet `Kritik`.
 
 ## Langkah Deploy
 
@@ -32,8 +35,8 @@ Apps Script Web App  ──►  Google Spreadsheet (database)
    - *Execute as*: **Me**.
    - *Who has access*: **Anyone** (atau "Anyone with Google account" bila ingin terbatas).
    - Klik **Deploy**, salin **Web app URL** (berakhiran `/exec`).
-5. Saat pertama dijalankan, sheet `Users`, `Warga`, `Sanggahan`, `Meta` dibuat
-   dan diisi data contoh otomatis.
+5. Saat pertama dijalankan, sheet `Users`, `Warga`, `Sanggahan`, `Kritik`, `Meta`
+   dibuat dan diisi data contoh otomatis.
 6. Di proyek aplikasi, buka [../config.js](../config.js) dan isi:
    ```js
    window.DTSEN_CONFIG = { apiUrl: 'https://script.google.com/macros/s/AKfycb..../exec' };
@@ -52,9 +55,10 @@ Apps Script Web App  ──►  Google Spreadsheet (database)
 |-------------------|--------------|--------|
 | `ping`            | —            | cek hidup |
 | `login`           | —            | validasi kredensial → data user |
+| `submitKritik`    | —            | kirim kritik & saran (boleh tanpa login) |
 | `bootstrap`       | semua login  | ambil warga + sanggahan (di-scope utk SLS) |
+| `submitSanggahan` | semua login  | ajukan sanggahan (termasuk Kepala SLS) |
 | `saveWarga`       | tulis        | tambah/perbarui satu KK |
-| `submitSanggahan` | tulis        | ajukan sanggahan |
 | `updateSanggahan` | tulis        | ubah status/keputusan sanggahan |
 | `reset`           | tulis        | pulihkan data contoh |
 

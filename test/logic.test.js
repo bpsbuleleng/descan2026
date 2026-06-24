@@ -49,6 +49,40 @@ test('canCrud(): only Operator and Kepala Desa', () => {
   assert.equal(makeInstance({ auth: { role: 'Kepala SLS', wilayah: 'Dusun Krajan' } }).canCrud(), false);
 });
 
+test('canSanggah(): any logged-in role may submit (incl. Kepala SLS), guests cannot', () => {
+  assert.equal(makeInstance({ auth: null }).canSanggah(), false);
+  assert.equal(makeInstance({ auth: { role: 'Operator' } }).canSanggah(), true);
+  assert.equal(makeInstance({ auth: { role: 'Kepala Desa' } }).canSanggah(), true);
+  assert.equal(makeInstance({ auth: { role: 'Kepala SLS', wilayah: 'Banjar Dinas Tembok' } }).canSanggah(), true);
+});
+
+test('Kepala SLS can open and submit a sanggahan (not gated by canCrud)', () => {
+  const c = makeInstance({ auth: { role: 'Kepala SLS', nama: 'I Made Astawan', wilayah: 'Banjar Dinas Tembok' } });
+  c.bukaRiwayat('w13'); // a household inside its banjar
+  c.onBukaFormSanggahan();
+  assert.equal(c.state.showSanggahanForm, true, 'read-only SLS may still open the sanggahan form');
+  c.state.sanggahanForm = { pengaju: 'Kelian Tembok', nik: '-', hubungan: 'RT/RW', alasan: 'Mohon ditinjau ulang.' };
+  const before = c.state.sanggahan.length;
+  c.onSubmitSanggahan();
+  assert.equal(c.state.sanggahan.length, before + 1, 'sanggahan recorded');
+  assert.equal(c.state.showSanggahanForm, false);
+  assert.equal(c.state.toast.type, 'ok');
+});
+
+test('onSubmitKritik(): isi is required; otherwise it closes and resets', () => {
+  // Empty content → blocked, modal stays open with an error toast.
+  const c = makeInstance({ showKritikModal: true, kritikForm: { nama: 'A', organisasi: 'BPD', isi: '   ' } });
+  c.onSubmitKritik();
+  assert.equal(c.state.showKritikModal, true);
+  assert.equal(c.state.toast.type, 'err');
+  // Valid content → modal closes, form resets, success toast (nama/organisasi optional).
+  const c2 = makeInstance({ showKritikModal: true, kritikForm: { nama: '', organisasi: '', isi: 'Mohon tambah fitur ekspor.' } });
+  c2.onSubmitKritik();
+  assert.equal(c2.state.showKritikModal, false);
+  assert.equal(c2.state.kritikForm.isi, '');
+  assert.equal(c2.state.toast.type, 'ok');
+});
+
 test('visibleWarga(): Kepala SLS is scoped to its wilayah', () => {
   const all = makeInstance({ auth: { role: 'Operator' } }).visibleWarga();
   assert.equal(all.length, 18);

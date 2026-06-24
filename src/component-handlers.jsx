@@ -198,10 +198,10 @@ Object.assign(Component.prototype, {
   },
 
   onSanggahanChange(e){ const k=e.target.getAttribute('data-sgfield'); const v=e.target.value; this.setState(s=>({sanggahanForm:Object.assign({},s.sanggahanForm,{[k]:v})})); },
-  onBukaFormSanggahan(){ if(!this.canCrud()) return; this.setState({showSanggahanForm:true,sanggahanForm:{pengaju:'',nik:'',hubungan:'Warga Bersangkutan',alasan:''}}); },
+  onBukaFormSanggahan(){ if(!this.canSanggah()) return; this.setState({showSanggahanForm:true,sanggahanForm:{pengaju:'',nik:'',hubungan:'Warga Bersangkutan',alasan:''}}); },
   onTutupFormSanggahan(){ this.setState({showSanggahanForm:false}); },
   onSubmitSanggahan(){
-    if(!this.canCrud()) return;
+    if(!this.canSanggah()) return;
     const f=this.state.sanggahanForm;
     if(!f.pengaju.trim()||!f.alasan.trim()){ this.setState({toast:{type:'err',msg:'Nama pengaju dan alasan sanggahan wajib diisi.'}}); this.autoClear(); return; }
     const newSg={id:'s'+Date.now(),wargaId:this.state.selectedId,tanggalSnapshot:this.state.selectedTanggal,pengaju:f.pengaju,nik:f.nik||'-',hubungan:f.hubungan,alasan:f.alasan,status:'Diajukan',tanggalPengajuan:this.state.today,tanggalSelesai:'',catatanOperator:''};
@@ -212,6 +212,19 @@ Object.assign(Component.prototype, {
   updateStatus(id,status){ if(!this.canCrud()) return; this.setState(s=>({sanggahan:s.sanggahan.map(x=>x.id===id?Object.assign({},x,{status:status}):x)})); this.push('updateSanggahan',{id:id,status:status}); },
   mulaiProses(id){ if(!this.canCrud()) return; this.setState({processingId:id,processCatatan:''}); },
   selesaikanSanggahan(id,status,catatan){ if(!this.canCrud()) return; const tgl=this.state.today; this.setState(s=>({sanggahan:s.sanggahan.map(x=>x.id===id?Object.assign({},x,{status:status,catatanOperator:catatan,tanggalSelesai:s.today}):x),processingId:null,processCatatan:''})); this.push('updateSanggahan',{id:id,status:status,catatanOperator:catatan,tanggalSelesai:tgl}); },
+
+  // -- Kritik & saran (tersedia di halaman login & sidebar, tanpa perlu hak CRUD) --
+  onBukaKritik(){ this.setState({showKritikModal:true,kritikForm:{nama:'',organisasi:'',isi:''}}); },
+  onTutupKritik(){ this.setState({showKritikModal:false}); },
+  onKritikChange(e){ const k=e.target.getAttribute('data-kritik'); const v=e.target.value; this.setState(s=>({kritikForm:Object.assign({},s.kritikForm,{[k]:v})})); },
+  onSubmitKritik(){
+    const f=this.state.kritikForm;
+    if(!f.isi||!f.isi.trim()){ this.setState({toast:{type:'err',msg:'Isi kritik/saran wajib diisi.'}}); this.autoClear(); return; }
+    const kritik={id:'k'+Date.now(),nama:(f.nama||'').trim()||'Anonim',organisasi:(f.organisasi||'').trim()||'-',isi:f.isi.trim(),tanggal:this.state.today};
+    this.setState({showKritikModal:false,kritikForm:{nama:'',organisasi:'',isi:''},toast:{type:'ok',msg:'Terima kasih! Kritik & saran Anda telah terkirim.'}});
+    this.push('submitKritik',{kritik:kritik});
+    this.autoClear();
+  },
 
   hapusWarga(id){
     if(!this.canCrud()) return;

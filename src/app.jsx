@@ -110,7 +110,7 @@ Object.assign(Component.prototype, {
     if(st.toast){ const ok=st.toast.type!=='err'; toastStyle='position:fixed;right:'+(st.isMobile?'12px':'20px')+';bottom:'+(st.isMobile?'70px':'20px')+';z-index:60;padding:13px 18px;border-radius:12px;font-size:13px;font-weight:600;color:#fff;max-width:'+(st.isMobile?'calc(100vw - 24px)':'380px')+';box-shadow:0 8px 24px rgba(0,0,0,0.2);animation:tslide 0.25s ease;background:'+(ok?'#16a34a':'#dc2626')+';'; }
 
     return {
-      auth:auth, canCrud:canCrud, roleLabel:auth?auth.role:'', wilayahLabel:auth&&auth.wilayah?auth.wilayah:'', serverMode:this.serverMode(),
+      auth:auth, canCrud:canCrud, canSanggah:this.canSanggah(), roleLabel:auth?auth.role:'', wilayahLabel:auth&&auth.wilayah?auth.wilayah:'', serverMode:this.serverMode(),
       namaDesa:namaDesa, namaOperator:namaOperator, opInitials:opInitials, pageTitle:titles[st.view], tanggalHariIni:this.formatTanggal(st.today),
       navItems:navItems, isDashboard:st.view==='dashboard', isDaftar:st.view==='daftar', isForm:st.view==='form', isRiwayat:st.view==='riwayat', isSanggahan:st.view==='sanggahan',
       search:st.search, filterDesa:st.filterDesa, filterRt:st.filterRt, filterDesil:st.filterDesil, filterBansos:st.filterBansos, filterSanggahan:st.filterSanggahan,
@@ -180,7 +180,39 @@ Object.assign(Component.prototype, {
               ))}
             </div>
           </div>
+          <button onClick={()=>this.onBukaKritik()} style={css('display:flex;align-items:center;justify-content:center;gap:7px;padding:11px;font-family:inherit;font-size:13px;font-weight:700;border:1.5px solid #e0e0de;background:#fff;color:#3d4152;border-radius:10px;cursor:pointer;')}><span style={css('font-size:14px;')}>✎</span>Sampaikan Kritik &amp; Saran</button>
           <div style={css('text-align:center; font-size:11px; font-weight:700; color:#92400e; letter-spacing:0.03em;')}>PROTOTYPE · autentikasi demo sisi-klien</div>
+        </div>
+        {this.renderKritikModal()}
+      </div>
+    );
+  },
+
+  // -- Modal Kritik & Saran (dipakai di halaman login & di dalam aplikasi) ------
+  // Memakai this.state langsung agar bisa dirender di kedua konteks (login & app).
+  renderKritikModal(){
+    if(!this.state.showKritikModal) return null;
+    const kf=this.state.kritikForm;
+    const lab='display:block;font-size:12px;font-weight:600;color:#52576b;margin-bottom:5px;';
+    const inp='width:100%;padding:9px 11px;border:1.5px solid #e0e0de;border-radius:8px;font-family:inherit;font-size:13.5px;color:#18191f;background:#fff;';
+    const opsional=(<span style={css('color:#9ba2b6;font-weight:500;')}> (opsional)</span>);
+    return (
+      <div onClick={()=>this.onTutupKritik()} style={css("position:fixed;inset:0;z-index:110;background:rgba(15,18,28,0.45);display:flex;align-items:center;justify-content:center;padding:20px;font-family:'Plus Jakarta Sans',system-ui,sans-serif;animation:fadein 0.15s ease;")}>
+        <div onClick={(e)=>e.stopPropagation()} style={css('background:#fff;border-radius:16px;padding:24px;width:100%;max-width:440px;display:flex;flex-direction:column;gap:13px;box-shadow:0 20px 60px rgba(0,0,0,0.3);')}>
+          <div style={css('display:flex;align-items:flex-start;justify-content:space-between;gap:10px;')}>
+            <div>
+              <div style={css('font-size:16px;font-weight:800;color:#18191f;letter-spacing:-0.01em;')}>Kritik &amp; Saran</div>
+              <div style={css('font-size:12px;color:#9ba2b6;margin-top:3px;')}>Bantu kami meningkatkan layanan DTSEN Desa</div>
+            </div>
+            <button onClick={()=>this.onTutupKritik()} title="Tutup" style={css('flex:none;width:30px;height:30px;border-radius:8px;border:1px solid #e0e0de;background:#fafaf9;color:#52576b;font-size:17px;line-height:1;cursor:pointer;')}>×</button>
+          </div>
+          <div><label style={css(lab)}>Nama{opsional}</label><input data-kritik="nama" value={kf.nama} onChange={(e)=>this.onKritikChange(e)} placeholder="Nama Anda" style={css(inp)} /></div>
+          <div><label style={css(lab)}>Organisasi{opsional}</label><input data-kritik="organisasi" value={kf.organisasi} onChange={(e)=>this.onKritikChange(e)} placeholder="mis. Karang Taruna, BPD, RT/RW" style={css(inp)} /></div>
+          <div><label style={css(lab)}>Kritik / Saran <span style={css('color:'+ORANGE+';')}>*</span></label><textarea data-kritik="isi" value={kf.isi} onChange={(e)=>this.onKritikChange(e)} placeholder="Tuliskan kritik atau saran Anda…" style={css(inp+'height:96px;resize:vertical;line-height:1.6;')}></textarea></div>
+          <div style={css('display:flex;gap:8px;justify-content:flex-end;margin-top:2px;')}>
+            <button onClick={()=>this.onTutupKritik()} style={css('padding:9px 16px;font-family:inherit;font-size:13px;font-weight:600;border:1.5px solid #e0e0de;background:#fff;color:#3d4152;border-radius:8px;cursor:pointer;')}>Batal</button>
+            <button onClick={()=>this.onSubmitKritik()} style={css('padding:9px 18px;font-family:inherit;font-size:13px;font-weight:700;border:none;background:#1e50d0;color:#fff;border-radius:8px;cursor:pointer;')}>Kirim</button>
+          </div>
         </div>
       </div>
     );
@@ -693,6 +725,9 @@ Object.assign(Component.prototype, {
                   {item.badge>0&&<span style={css('background:#dc2626;color:#fff;border-radius:8px;padding:1px 7px;font-size:10px;font-weight:800;min-width:18px;text-align:center;')}>{item.badge}</span>}
                 </button>
               ))}
+              <div style={css('margin-top:8px;padding-top:10px;border-top:1px solid #f0f0ee;')}>
+                <button onClick={()=>this.onBukaKritik()} style={css('width:100%;text-align:left;display:flex;align-items:center;gap:9px;padding:10px 14px;border:1px solid #e0e0de;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:#3d4152;background:#fafaf9;')}><span style={css('font-size:14px;')}>✎</span>Kritik &amp; Saran</button>
+              </div>
             </aside>
           )}
 
@@ -946,7 +981,7 @@ Object.assign(Component.prototype, {
                         <span style={css('font-size:13px; font-weight:700; color:#18191f;')}>Sanggahan Snapshot Ini</span>
                         <span style={css('font-size:11.5px; color:#9ba2b6; margin-left:8px;')}>{V.selectedSnap.jumlahSanggahan}</span>
                       </div>
-                      {V.canCrud && V.canAjukanSanggahan && (
+                      {V.canSanggah && V.canAjukanSanggahan && (
                         <button onClick={V.onBukaFormSanggahan} style={css('padding:7px 13px; font-family:inherit; font-size:12.5px; font-weight:700; border:1.5px solid #1e50d0; background:#eef2fc; color:#1e50d0; border-radius:8px; cursor:pointer; white-space:nowrap;')}>+ Ajukan Sanggahan</button>
                       )}
                     </div>
@@ -1072,8 +1107,13 @@ Object.assign(Component.prototype, {
                   {item.badge>0&&<span style={css('position:absolute;top:6px;right:calc(50% - 18px);min-width:14px;height:14px;padding:0 3px;border-radius:7px;background:#dc2626;color:#fff;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;')}>{item.badge}</span>}
                 </button>);
             })}
+            <button onClick={()=>this.onBukaKritik()} style={css('flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:none;background:none;cursor:pointer;font-family:inherit;padding:0;border-top:2px solid transparent;')}>
+              <span style={css('font-size:18px;color:#9ba2b6;line-height:1;')}>✎</span>
+              <span style={css('font-size:10px;font-weight:500;color:#9ba2b6;white-space:nowrap;')}>Saran</span>
+            </button>
           </nav>
         )}
+        {this.renderKritikModal()}
         {V.toast && (
           <div style={css(V.toastStyle)}>{V.toast.msg}</div>
         )}

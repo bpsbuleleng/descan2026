@@ -13,10 +13,11 @@
  * Deploy: lihat server/README.md.
  */
 
-var SHEETS = { USERS: 'Users', WARGA: 'Warga', SANGGAHAN: 'Sanggahan', META: 'Meta' };
+var SHEETS = { USERS: 'Users', WARGA: 'Warga', SANGGAHAN: 'Sanggahan', KRITIK: 'Kritik', META: 'Meta' };
 
 var WARGA_COLS = ['id','noKK','nik','nama','dusun','rt','rw','alamat','desil','bansos','updatedAt','dataJson','status'];
 var SANGGAHAN_COLS = ['id','wargaId','tanggalSnapshot','pengaju','nik','hubungan','alasan','status','tanggalPengajuan','tanggalSelesai','catatanOperator'];
+var KRITIK_COLS = ['id','nama','organisasi','isi','tanggal'];
 var USER_COLS = ['username','password','nama','role','wilayah'];
 
 // ---- Entry points ----------------------------------------------------------
@@ -36,6 +37,8 @@ function handle(e) {
   try {
     if (action === 'ping')             return json({ ok: true, time: new Date().toISOString() });
     if (action === 'login')            return json(actionLogin(req.payload || {}));
+    // Kritik & saran boleh dikirim tanpa login (tersedia di halaman login).
+    if (action === 'submitKritik')     return json(actionSubmitKritik((req.payload && (req.payload.kritik || req.payload)) || {}));
 
     var user = authenticate(req.auth);     // semua action lain butuh login
     if (!user) return json({ ok: false, error: 'Sesi tidak sah. Silakan login ulang.' });
@@ -45,7 +48,8 @@ function handle(e) {
     // bentuk tak terbungkus agar tahan terhadap kedua format.
     if (action === 'saveWarga')        return json(requireWrite(user, function(){ var p=req.payload||{}; return actionSaveWarga(user, p.warga||p); }));
     if (action === 'deleteWarga')      return json(requireWrite(user, function(){ var p=req.payload||{}; return actionDeleteWarga(p.warga||p); }));
-    if (action === 'submitSanggahan')  return json(requireWrite(user, function(){ var p=req.payload||{}; return actionSubmitSanggahan(p.sanggahan||p); }));
+    // Menyanggah cukup butuh login (Operator, Kepala Desa, & Kepala SLS) — bukan hak tulis penuh.
+    if (action === 'submitSanggahan')  return json((function(){ var p=req.payload||{}; return actionSubmitSanggahan(p.sanggahan||p); })());
     if (action === 'updateSanggahan')  return json(requireWrite(user, function(){ return actionUpdateSanggahan(req.payload); }));
     if (action === 'uploadFoto')       return json(requireWrite(user, function(){ return actionUploadFoto(req.payload || {}); }));
     if (action === 'reset')            return json(requireWrite(user, function(){ seedData(true); return { ok: true }; }));
@@ -148,6 +152,21 @@ function actionUpdateSanggahan(p) {
   return { ok: true };
 }
 
+// ---- Kritik & Saran (boleh tanpa login) ------------------------------------
+function actionSubmitKritik(k) {
+  if (!k || !k.isi || !String(k.isi).trim()) return { ok: false, error: 'Isi kritik/saran kosong.' };
+  var sh = sheet(SHEETS.KRITIK);
+  var rec = {
+    id: k.id || ('k' + new Date().getTime()),
+    nama: (k.nama && String(k.nama).trim()) || 'Anonim',
+    organisasi: (k.organisasi && String(k.organisasi).trim()) || '-',
+    isi: String(k.isi).trim(),
+    tanggal: k.tanggal || today()
+  };
+  sh.appendRow(KRITIK_COLS.map(function(c){ return rec[c] != null ? rec[c] : ''; }));
+  return { ok: true, kritik: rec };
+}
+
 function stripFoto(fotoObj) {
   if (!fotoObj) return;
   Object.keys(fotoObj).forEach(function(k){
@@ -233,6 +252,7 @@ function ensureSetup() {
   writeHeader(SHEETS.USERS, USER_COLS);
   writeHeader(SHEETS.WARGA, WARGA_COLS);
   writeHeader(SHEETS.SANGGAHAN, SANGGAHAN_COLS);
+  writeHeader(SHEETS.KRITIK, KRITIK_COLS);
   writeHeader(SHEETS.META, ['key', 'value']);
   seedUsers();
   seedData(false);
