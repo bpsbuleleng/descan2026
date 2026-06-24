@@ -824,7 +824,7 @@ Object.assign(Component.prototype, {
                 </div>
                 );
               })()}
-              <div style={css('display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;')}>
+              <div style={css('display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:'+(V.isMobile?'80px':'56px')+';')}>
                 <span style={css('font-size:12px; color:#9ba2b6;')}>{V.jumlahTampil} rumah tangga · Hal. {V.currentPage} dari {V.jumlahHalaman}</span>
                 {V.jumlahHalaman>1&&(
                   <div style={css('display:flex;gap:4px;align-items:center;')}>

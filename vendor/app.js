@@ -4492,7 +4492,7 @@ Object.assign(Component.prototype, {
         style: css('padding:40px; text-align:center; color:#9ba2b6; font-size:13.5px;')
       }, "Tidak ada rumah tangga yang cocok."));
     })(), /*#__PURE__*/React.createElement("div", {
-      style: css('display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;')
+      style: css('display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:' + (V.isMobile ? '80px' : '56px') + ';')
     }, /*#__PURE__*/React.createElement("span", {
       style: css('font-size:12px; color:#9ba2b6;')
     }, V.jumlahTampil, " rumah tangga · Hal. ", V.currentPage, " dari ", V.jumlahHalaman), V.jumlahHalaman > 1 && /*#__PURE__*/React.createElement("div", {
