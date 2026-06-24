@@ -61,7 +61,9 @@ function handle(e) {
 }
 
 // ---- Auth ------------------------------------------------------------------
-function canWrite(user) { return user && (user.role === 'Operator' || user.role === 'Kepala Desa'); }
+function canWrite(user) { return user && (user.role === 'Admin' || user.role === 'Operator' || user.role === 'Kepala Desa'); }
+// Hanya Admin yang boleh membaca kotak kritik & saran.
+function canReadKritik(user) { return user && user.role === 'Admin'; }
 
 function requireWrite(user, fn) {
   if (!canWrite(user)) return { ok: false, error: 'Hanya Operator & Kepala Desa yang boleh mengubah data.' };
@@ -98,7 +100,10 @@ function actionBootstrap(user) {
     var ids = {}; warga.forEach(function(w){ ids[w.id] = true; });
     sanggahan = sanggahan.filter(function(s){ return ids[s.wargaId]; });
   }
-  return { ok: true, warga: warga, sanggahan: sanggahan, serverDate: today() };
+  var res = { ok: true, warga: warga, sanggahan: sanggahan, serverDate: today() };
+  // Admin juga menerima kotak kritik & saran saat bootstrap.
+  if (canReadKritik(user)) res.kritik = readSheet(SHEETS.KRITIK, KRITIK_COLS);
+  return res;
 }
 
 function readWarga() {
@@ -280,6 +285,7 @@ function seedUsers() {
   var sh = sheet(SHEETS.USERS);
   if (sh.getLastRow() > 1) return;
   var rows = [
+    ['admin', 'admin123', 'Administrator', 'Admin', ''],
     ['kepaladesa', 'desa123', 'I Gusti Ngurah Rai', 'Kepala Desa', ''],
     ['operator', 'operator123', 'Komang Sutarja', 'Operator', ''],
     ['sls.sambirenteng', 'sls123', 'I Nyoman Lestari', 'Kepala SLS', 'Banjar Dinas Sambirenteng'],

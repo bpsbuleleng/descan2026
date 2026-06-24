@@ -221,7 +221,8 @@ Object.assign(Component.prototype, {
     const f=this.state.kritikForm;
     if(!f.isi||!f.isi.trim()){ this.setState({toast:{type:'err',msg:'Isi kritik/saran wajib diisi.'}}); this.autoClear(); return; }
     const kritik={id:'k'+Date.now(),nama:(f.nama||'').trim()||'Anonim',organisasi:(f.organisasi||'').trim()||'-',isi:f.isi.trim(),tanggal:this.state.today};
-    this.setState({showKritikModal:false,kritikForm:{nama:'',organisasi:'',isi:''},toast:{type:'ok',msg:'Terima kasih! Kritik & saran Anda telah terkirim.'}});
+    // Catat ke kotak masuk lokal (terlihat Admin) selain didorong ke server.
+    this.setState(s=>({kritik:[kritik,...(s.kritik||[])],showKritikModal:false,kritikForm:{nama:'',organisasi:'',isi:''},toast:{type:'ok',msg:'Terima kasih! Kritik & saran Anda telah terkirim.'}}));
     this.push('submitKritik',{kritik:kritik});
     this.autoClear();
   },

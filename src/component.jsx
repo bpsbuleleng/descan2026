@@ -8,9 +8,11 @@ class Component extends React.Component {
     super(props);
     this.ASET=['Sepeda','Sepeda Motor','Mobil','Kulkas','TV','AC','Perahu','Ternak'];
     this.BULAN=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-    // Akun demo (prototipe — autentikasi sisi-klien). Hanya Operator & Kepala Desa
-    // yang dapat CRUD; Kepala SLS bersifat hanya-lihat dan dibatasi ke wilayahnya.
+    // Akun demo (prototipe — autentikasi sisi-klien). Admin, Operator & Kepala Desa
+    // dapat CRUD; hanya Admin yang dapat membaca kotak kritik & saran. Kepala SLS
+    // bersifat hanya-lihat dan dibatasi ke wilayahnya.
     this.ACCOUNTS=[
+      {username:'admin',          password:'admin123',    nama:'Administrator',       role:'Admin',       wilayah:null},
       {username:'kepaladesa',     password:'desa123',     nama:'I Gusti Ngurah Rai',  role:'Kepala Desa', wilayah:null},
       {username:'operator',       password:'operator123', nama:'Komang Sutarja',      role:'Operator',    wilayah:null},
       {username:'sls.sambirenteng',password:'sls123',     nama:'I Nyoman Lestari',    role:'Kepala SLS',  wilayah:'Banjar Dinas Sambirenteng'},
@@ -43,7 +45,7 @@ class Component extends React.Component {
     this.setState({loading:true});
     this.apiCall('bootstrap',{}).then(res=>{
       this.setState({loading:false});
-      if(res&&res.ok){ this.setState({warga:res.warga||[],sanggahan:res.sanggahan||[]}); }
+      if(res&&res.ok){ const o={warga:res.warga||[],sanggahan:res.sanggahan||[]}; if(res.kritik) o.kritik=res.kritik; this.setState(o); }
       else { this.setState({toast:{type:'err',msg:'Gagal memuat data dari server. Menampilkan data lokal.'}}); this.autoClear(); }
     }).catch(()=>{ this.setState({loading:false,toast:{type:'err',msg:'Gagal memuat data dari server. Menampilkan data lokal.'}}); this.autoClear(); });
   }
@@ -69,10 +71,12 @@ class Component extends React.Component {
       const c=JSON.parse(raw); if(c&&c.username&&c.password) return c; }catch(e){}
     return null;
   }
-  canCrud(){ const a=this.state.auth; return !!a&&(a.role==='Operator'||a.role==='Kepala Desa'); }
+  canCrud(){ const a=this.state.auth; return !!a&&(a.role==='Admin'||a.role==='Operator'||a.role==='Kepala Desa'); }
   // Hak mengajukan sanggahan: semua peran yang sudah login (termasuk Kepala SLS),
   // meski Kepala SLS tetap hanya-lihat untuk CRUD warga & pemrosesan sanggahan.
   canSanggah(){ return !!this.state.auth; }
+  // Hak membaca kotak kritik & saran yang masuk: hanya Admin.
+  canViewKritik(){ const a=this.state.auth; return !!a&&a.role==='Admin'; }
   // Warga yang boleh dilihat: Kepala SLS dibatasi ke wilayahnya, lainnya melihat semua.
   visibleWarga(){ const a=this.state.auth; const w=this.state.warga; return (a&&a.wilayah)?w.filter(x=>x.dusun===a.wilayah):w; }
   onLoginField(e){ const k=e.target.getAttribute('data-login'); const v=e.target.value; this.setState(s=>({loginForm:Object.assign({},s.loginForm,{[k]:v,error:''})})); }
@@ -109,6 +113,7 @@ class Component extends React.Component {
     return {auth:this.loadAuth(), loginForm:{username:'',password:'',error:''},
       view:'dashboard',search:'',filterDesa:'semua',filterRt:'semua',filterDesil:'semua',filterBansos:'semua',filterSanggahan:'semua',
       warga:saved?saved.warga:this.seedWarga(), sanggahan:saved?saved.sanggahan:this.seedSanggahan(),
+      kritik:(saved&&saved.kritik)?saved.kritik:this.seedKritik(),
       form:null, editId:null, selectedId:null, selectedTanggal:null,
       showSanggahanForm:false, sanggahanForm:{pengaju:'',nik:'',hubungan:'Warga Bersangkutan',alasan:''},
       showKritikModal:false, kritikForm:{nama:'',organisasi:'',isi:''},
@@ -127,13 +132,13 @@ class Component extends React.Component {
     return null;
   }
   saveStore(state){
-    try{ window.localStorage.setItem(Component.STORE_KEY, JSON.stringify({warga:state.warga,sanggahan:state.sanggahan})); }catch(e){}
+    try{ window.localStorage.setItem(Component.STORE_KEY, JSON.stringify({warga:state.warga,sanggahan:state.sanggahan,kritik:state.kritik})); }catch(e){}
   }
   resetStore(){
     if(!this.canCrud()) return;
     if(this.serverMode()){ this.apiCall('reset',{}).then(res=>{ if(res&&res.ok){ this.bootstrap(); this.setState({view:'dashboard',toast:{type:'ok',msg:'Data contoh di server dipulihkan.'}}); this.autoClear(); } else { this.push('reset',{}); } }).catch(()=>{ this.setState({toast:{type:'err',msg:'Server tidak terjangkau.'}}); this.autoClear(); }); return; }
     try{ window.localStorage.removeItem(Component.STORE_KEY); }catch(e){}
-    this.setState({warga:this.seedWarga(),sanggahan:this.seedSanggahan(),view:'dashboard',selectedId:null,selectedTanggal:null,form:null,editId:null,toast:{type:'ok',msg:'Data contoh dipulihkan.'}});
+    this.setState({warga:this.seedWarga(),sanggahan:this.seedSanggahan(),kritik:this.seedKritik(),view:'dashboard',selectedId:null,selectedTanggal:null,form:null,editId:null,toast:{type:'ok',msg:'Data contoh dipulihkan.'}});
     this.autoClear();
   }
   componentDidMount(){
@@ -153,7 +158,7 @@ class Component extends React.Component {
     window.removeEventListener('scroll',this._onScroll);
   }
   componentDidUpdate(_prevProps, prevState){
-    if(prevState.warga!==this.state.warga || prevState.sanggahan!==this.state.sanggahan){
+    if(prevState.warga!==this.state.warga || prevState.sanggahan!==this.state.sanggahan || prevState.kritik!==this.state.kritik){
       this.saveStore(this.state);
     }
   }

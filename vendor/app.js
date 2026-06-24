@@ -392,9 +392,16 @@ class Component extends React.Component {
     super(props);
     this.ASET = ['Sepeda', 'Sepeda Motor', 'Mobil', 'Kulkas', 'TV', 'AC', 'Perahu', 'Ternak'];
     this.BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-    // Akun demo (prototipe — autentikasi sisi-klien). Hanya Operator & Kepala Desa
-    // yang dapat CRUD; Kepala SLS bersifat hanya-lihat dan dibatasi ke wilayahnya.
+    // Akun demo (prototipe — autentikasi sisi-klien). Admin, Operator & Kepala Desa
+    // dapat CRUD; hanya Admin yang dapat membaca kotak kritik & saran. Kepala SLS
+    // bersifat hanya-lihat dan dibatasi ke wilayahnya.
     this.ACCOUNTS = [{
+      username: 'admin',
+      password: 'admin123',
+      nama: 'Administrator',
+      role: 'Admin',
+      wilayah: null
+    }, {
       username: 'kepaladesa',
       password: 'desa123',
       nama: 'I Gusti Ngurah Rai',
@@ -476,10 +483,12 @@ class Component extends React.Component {
         loading: false
       });
       if (res && res.ok) {
-        this.setState({
+        const o = {
           warga: res.warga || [],
           sanggahan: res.sanggahan || []
-        });
+        };
+        if (res.kritik) o.kritik = res.kritik;
+        this.setState(o);
       } else {
         this.setState({
           toast: {
@@ -552,12 +561,17 @@ class Component extends React.Component {
   }
   canCrud() {
     const a = this.state.auth;
-    return !!a && (a.role === 'Operator' || a.role === 'Kepala Desa');
+    return !!a && (a.role === 'Admin' || a.role === 'Operator' || a.role === 'Kepala Desa');
   }
   // Hak mengajukan sanggahan: semua peran yang sudah login (termasuk Kepala SLS),
   // meski Kepala SLS tetap hanya-lihat untuk CRUD warga & pemrosesan sanggahan.
   canSanggah() {
     return !!this.state.auth;
+  }
+  // Hak membaca kotak kritik & saran yang masuk: hanya Admin.
+  canViewKritik() {
+    const a = this.state.auth;
+    return !!a && a.role === 'Admin';
   }
   // Warga yang boleh dilihat: Kepala SLS dibatasi ke wilayahnya, lainnya melihat semua.
   visibleWarga() {
@@ -700,6 +714,7 @@ class Component extends React.Component {
       filterSanggahan: 'semua',
       warga: saved ? saved.warga : this.seedWarga(),
       sanggahan: saved ? saved.sanggahan : this.seedSanggahan(),
+      kritik: saved && saved.kritik ? saved.kritik : this.seedKritik(),
       form: null,
       editId: null,
       selectedId: null,
@@ -748,7 +763,8 @@ class Component extends React.Component {
     try {
       window.localStorage.setItem(Component.STORE_KEY, JSON.stringify({
         warga: state.warga,
-        sanggahan: state.sanggahan
+        sanggahan: state.sanggahan,
+        kritik: state.kritik
       }));
     } catch (e) {}
   }
@@ -786,6 +802,7 @@ class Component extends React.Component {
     this.setState({
       warga: this.seedWarga(),
       sanggahan: this.seedSanggahan(),
+      kritik: this.seedKritik(),
       view: 'dashboard',
       selectedId: null,
       selectedTanggal: null,
@@ -827,7 +844,7 @@ class Component extends React.Component {
     window.removeEventListener('scroll', this._onScroll);
   }
   componentDidUpdate(_prevProps, prevState) {
-    if (prevState.warga !== this.state.warga || prevState.sanggahan !== this.state.sanggahan) {
+    if (prevState.warga !== this.state.warga || prevState.sanggahan !== this.state.sanggahan || prevState.kritik !== this.state.kritik) {
       this.saveStore(this.state);
     }
   }
@@ -1961,6 +1978,28 @@ Object.assign(Component.prototype, {
       catatanOperator: 'Pengecekan STNK menunjukkan kendaraan atas nama yang bersangkutan. Sanggahan ditolak sesuai bukti dokumen.'
     }];
   },
+  // Kritik & saran contoh yang sudah masuk — hanya terlihat oleh Admin di Kotak Saran.
+  seedKritik() {
+    return [{
+      id: 'k1',
+      nama: 'I Nyoman Lestari',
+      organisasi: 'BPD Sambirenteng',
+      isi: 'Mohon ditambahkan fitur ekspor daftar warga ke Excel agar memudahkan rekap musyawarah desa.',
+      tanggal: '2026-06-22'
+    }, {
+      id: 'k2',
+      nama: 'Karang Taruna Tembok',
+      organisasi: 'Karang Taruna',
+      isi: 'Tampilan di HP sudah bagus, namun tombol "Ajukan Sanggahan" agak susah ditemukan. Mohon dibuat lebih jelas.',
+      tanggal: '2026-06-21'
+    }, {
+      id: 'k3',
+      nama: 'Anonim',
+      organisasi: '-',
+      isi: 'Terima kasih, proses sanggah sekarang lebih transparan. Lanjutkan!',
+      tanggal: '2026-06-20'
+    }];
+  },
   blankForm() {
     const id = 'w' + Date.now();
     return {
@@ -2841,7 +2880,9 @@ Object.assign(Component.prototype, {
       isi: f.isi.trim(),
       tanggal: this.state.today
     };
-    this.setState({
+    // Catat ke kotak masuk lokal (terlihat Admin) selain didorong ke server.
+    this.setState(s => ({
+      kritik: [kritik, ...(s.kritik || [])],
       showKritikModal: false,
       kritikForm: {
         nama: '',
@@ -2852,7 +2893,7 @@ Object.assign(Component.prototype, {
         type: 'ok',
         msg: 'Terima kasih! Kritik & saran Anda telah terkirim.'
       }
-    });
+    }));
     this.push('submitKritik', {
       kritik: kritik
     });
@@ -2900,12 +2941,14 @@ Object.assign(Component.prototype, {
     });
     const vSanggahan = st.sanggahan.filter(sg => vIds[sg.wargaId]);
     const sanggahanPending = vSanggahan.filter(s => s.status === 'Diajukan' || s.status === 'Diproses').length;
+    const canViewKritik = this.canViewKritik();
     const titles = {
       dashboard: 'Dashboard',
       daftar: 'Daftar Warga',
       form: st.form && !st.form.isNew ? 'Edit Data' : 'Tambah Data',
       riwayat: 'Riwayat Perubahan',
-      sanggahan: 'Usul Sanggah'
+      sanggahan: 'Usul Sanggah',
+      kritik: 'Kotak Saran'
     };
     const mkNav = (key, label, badge) => {
       const active = st.view === key || key === 'daftar' && (st.view === 'form' || st.view === 'riwayat');
@@ -2918,6 +2961,8 @@ Object.assign(Component.prototype, {
       };
     };
     const navItems = [mkNav('dashboard', 'Dashboard'), mkNav('daftar', 'Daftar Warga'), mkNav('sanggahan', 'Sanggahan', sanggahanPending)];
+    // Admin mendapat menu Kotak Saran untuk membaca kritik & saran yang masuk.
+    if (canViewKritik) navItems.push(mkNav('kritik', 'Kotak Saran', (st.kritik || []).length));
     const q = st.search.trim().toLowerCase();
     let list = vWarga.filter(w => {
       if (q && (w.nama + ' ' + w.nik + ' ' + w.noKK).toLowerCase().indexOf(q) < 0) return false;
@@ -3197,6 +3242,16 @@ Object.assign(Component.prototype, {
     }
     const sanggahanForSnap = selectedSnap && selectedSnap.sanggahanList ? selectedSnap.sanggahanList : [];
     const canAjukanSanggahan = !st.showSanggahanForm;
+
+    // Kotak Saran (hanya Admin): kritik & saran yang masuk, terbaru di atas.
+    const kritikListDisplay = canViewKritik ? (st.kritik || []).map(k => ({
+      id: k.id,
+      nama: k.nama || 'Anonim',
+      organisasi: k.organisasi || '-',
+      isi: k.isi,
+      tanggalStr: this.formatTanggal(k.tanggal),
+      inisial: (String(k.nama || 'A').trim()[0] || 'A').toUpperCase()
+    })) : [];
     const sgFiltered = vSanggahan.filter(sg => st.filterSanggahan === 'semua' || sg.status === st.filterSanggahan);
     const sanggahanListDisplay = sgFiltered.map(sg => {
       const wg = st.warga.find(w => w.id === sg.wargaId);
@@ -3262,6 +3317,11 @@ Object.assign(Component.prototype, {
       isForm: st.view === 'form',
       isRiwayat: st.view === 'riwayat',
       isSanggahan: st.view === 'sanggahan',
+      isKritik: st.view === 'kritik',
+      canViewKritik: canViewKritik,
+      kritikListDisplay: kritikListDisplay,
+      kritikKosong: kritikListDisplay.length === 0,
+      kritikCount: kritikListDisplay.length,
       search: st.search,
       filterDesa: st.filterDesa,
       filterRt: st.filterRt,
@@ -3354,6 +3414,11 @@ Object.assign(Component.prototype, {
     const inpL = 'width:100%;padding:11px 13px;border:1.5px solid #e0e0de;border-radius:9px;font-family:inherit;font-size:14px;color:#18191f;background:#fafaf9;';
     const labL = 'display:block;font-size:12px;font-weight:600;color:#52576b;margin-bottom:6px;';
     const demo = [{
+      r: 'Admin',
+      u: 'admin',
+      p: 'admin123',
+      note: 'Akses penuh + Kotak Saran'
+    }, {
       r: 'Kepala Desa',
       u: 'kepaladesa',
       p: 'desa123',
@@ -4920,19 +4985,50 @@ Object.assign(Component.prototype, {
       style: css('padding:8px 16px; font-family:inherit; font-size:12.5px; font-weight:700; border:none; background:#1e50d0; color:#fff; border-radius:8px; cursor:pointer;')
     }, "Proses & Beri Keputusan")))), V.sgKosong && /*#__PURE__*/React.createElement("div", {
       style: css('background:#fff; border-radius:14px; padding:48px; text-align:center; color:#9ba2b6; font-size:13.5px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);')
-    }, "Tidak ada sanggahan yang cocok dengan filter.")))), !V.isForm && V.isMobile && /*#__PURE__*/React.createElement("nav", {
+    }, "Tidak ada sanggahan yang cocok dengan filter.")), V.isKritik && V.canViewKritik && /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; flex-direction:column; gap:16px; animation:fadein 0.2s ease;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;')
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:20px; font-weight:800; color:#18191f; letter-spacing:-0.02em;')
+    }, "Kotak Saran"), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:12.5px; color:#9ba2b6; margin-top:3px;')
+    }, "Kritik & saran yang masuk dari warga, BPD, dan masyarakat desa")), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:12.5px; font-weight:700; color:#1e50d0; background:#eef2fc; border:1px solid #c7d7f6; padding:6px 12px; border-radius:20px; white-space:nowrap;')
+    }, V.kritikCount, " masukan")), V.kritikListDisplay.map(k => /*#__PURE__*/React.createElement("div", {
+      key: k.id,
+      style: css('background:#fff; border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05); display:flex; gap:14px;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('flex:none; width:38px; height:38px; border-radius:50%; background:#eef2fc; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800; color:#1e50d0;')
+    }, k.inisial), /*#__PURE__*/React.createElement("div", {
+      style: css('flex:1; min-width:0; display:flex; flex-direction:column; gap:7px;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap;')
+    }, /*#__PURE__*/React.createElement("div", {
+      style: css('display:flex; flex-direction:column; gap:1px; min-width:0;')
+    }, /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:14px; font-weight:700; color:#18191f;')
+    }, k.nama), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11.5px; color:#9ba2b6;')
+    }, k.organisasi)), /*#__PURE__*/React.createElement("span", {
+      style: css('font-size:11.5px; color:#9ba2b6; white-space:nowrap; flex:none;')
+    }, k.tanggalStr)), /*#__PURE__*/React.createElement("div", {
+      style: css('font-size:13.5px; color:#3d4152; line-height:1.65;')
+    }, k.isi)))), V.kritikKosong && /*#__PURE__*/React.createElement("div", {
+      style: css('background:#fff; border-radius:14px; padding:48px; text-align:center; color:#9ba2b6; font-size:13.5px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);')
+    }, "Belum ada kritik & saran yang masuk.")))), !V.isForm && V.isMobile && /*#__PURE__*/React.createElement("nav", {
       style: css('position:fixed;bottom:0;left:0;right:0;z-index:29;background:#fff;border-top:1px solid #e8e8e6;display:flex;height:58px;')
     }, V.navItems.map((item, i) => {
-      const icons = ['⊞', '≡', '⚑'];
+      const icons = ['⊞', '≡', '⚑', '✉'];
       return /*#__PURE__*/React.createElement("button", {
         key: i,
         onClick: item.onClick,
         style: css('flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:none;background:none;cursor:pointer;font-family:inherit;padding:0;position:relative;border-top:2px solid ' + (item.active ? '#1e50d0' : 'transparent') + ';')
       }, /*#__PURE__*/React.createElement("span", {
         style: css('font-size:18px;color:' + (item.active ? '#1e50d0' : '#9ba2b6') + ';line-height:1;')
-      }, icons[i]), /*#__PURE__*/React.createElement("span", {
+      }, icons[i] || '•'), /*#__PURE__*/React.createElement("span", {
         style: css('font-size:10px;font-weight:' + (item.active ? '700' : '500') + ';color:' + (item.active ? '#1e50d0' : '#9ba2b6') + ';white-space:nowrap;')
-      }, item.label === 'Daftar Warga' ? 'Warga' : item.label === 'Sanggahan' ? 'Sanggah' : item.label), item.badge > 0 && /*#__PURE__*/React.createElement("span", {
+      }, item.label === 'Daftar Warga' ? 'Warga' : item.label === 'Sanggahan' ? 'Sanggah' : item.label === 'Kotak Saran' ? 'Kotak' : item.label), item.badge > 0 && /*#__PURE__*/React.createElement("span", {
         style: css('position:absolute;top:6px;right:calc(50% - 18px);min-width:14px;height:14px;padding:0 3px;border-radius:7px;background:#dc2626;color:#fff;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;')
       }, item.badge));
     }), /*#__PURE__*/React.createElement("button", {

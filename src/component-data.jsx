@@ -204,6 +204,15 @@ Object.assign(Component.prototype, {
     ];
   },
 
+  // Kritik & saran contoh yang sudah masuk — hanya terlihat oleh Admin di Kotak Saran.
+  seedKritik(){
+    return [
+      {id:'k1',nama:'I Nyoman Lestari',organisasi:'BPD Sambirenteng',isi:'Mohon ditambahkan fitur ekspor daftar warga ke Excel agar memudahkan rekap musyawarah desa.',tanggal:'2026-06-22'},
+      {id:'k2',nama:'Karang Taruna Tembok',organisasi:'Karang Taruna',isi:'Tampilan di HP sudah bagus, namun tombol "Ajukan Sanggahan" agak susah ditemukan. Mohon dibuat lebih jelas.',tanggal:'2026-06-21'},
+      {id:'k3',nama:'Anonim',organisasi:'-',isi:'Terima kasih, proses sanggah sekarang lebih transparan. Lanjutkan!',tanggal:'2026-06-20'},
+    ];
+  },
+
   blankForm(){
     const id='w'+Date.now();
     return { id:id, isNew:true, status:'draft',

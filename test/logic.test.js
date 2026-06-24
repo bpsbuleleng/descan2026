@@ -42,11 +42,30 @@ test('seed data has the expected shape (Buleleng: 3 desa)', () => {
   ['Diajukan', 'Diproses', 'Diterima', 'Ditolak'].forEach((s) => assert.ok(statuses.has(s), 'missing status ' + s));
 });
 
-test('canCrud(): only Operator and Kepala Desa', () => {
+test('canCrud(): Admin, Operator and Kepala Desa (not Kepala SLS)', () => {
   assert.equal(makeInstance({ auth: null }).canCrud(), false);
+  assert.equal(makeInstance({ auth: { role: 'Admin' } }).canCrud(), true);
   assert.equal(makeInstance({ auth: { role: 'Operator' } }).canCrud(), true);
   assert.equal(makeInstance({ auth: { role: 'Kepala Desa' } }).canCrud(), true);
   assert.equal(makeInstance({ auth: { role: 'Kepala SLS', wilayah: 'Dusun Krajan' } }).canCrud(), false);
+});
+
+test('canViewKritik(): only Admin may read the Kotak Saran inbox', () => {
+  assert.equal(makeInstance({ auth: null }).canViewKritik(), false);
+  assert.equal(makeInstance({ auth: { role: 'Admin' } }).canViewKritik(), true);
+  assert.equal(makeInstance({ auth: { role: 'Operator' } }).canViewKritik(), false);
+  assert.equal(makeInstance({ auth: { role: 'Kepala Desa' } }).canViewKritik(), false);
+  assert.equal(makeInstance({ auth: { role: 'Kepala SLS', wilayah: 'Banjar Dinas Tembok' } }).canViewKritik(), false);
+});
+
+test('seedKritik(): provides demo inbox entries with the expected shape', () => {
+  const c = makeInstance();
+  const K = c.seedKritik();
+  assert.ok(Array.isArray(K) && K.length >= 1);
+  K.forEach((k) => {
+    assert.ok(k.id && typeof k.isi === 'string' && k.isi.length > 0);
+    assert.ok('nama' in k && 'organisasi' in k && 'tanggal' in k);
+  });
 });
 
 test('canSanggah(): any logged-in role may submit (incl. Kepala SLS), guests cannot', () => {
@@ -69,18 +88,23 @@ test('Kepala SLS can open and submit a sanggahan (not gated by canCrud)', () => 
   assert.equal(c.state.toast.type, 'ok');
 });
 
-test('onSubmitKritik(): isi is required; otherwise it closes and resets', () => {
+test('onSubmitKritik(): isi is required; otherwise it closes, resets, and records to the inbox', () => {
   // Empty content → blocked, modal stays open with an error toast.
   const c = makeInstance({ showKritikModal: true, kritikForm: { nama: 'A', organisasi: 'BPD', isi: '   ' } });
   c.onSubmitKritik();
   assert.equal(c.state.showKritikModal, true);
   assert.equal(c.state.toast.type, 'err');
-  // Valid content → modal closes, form resets, success toast (nama/organisasi optional).
+  // Valid content → modal closes, form resets, success toast (nama/organisasi optional),
+  // and the new entry is prepended to the local Kotak Saran inbox.
   const c2 = makeInstance({ showKritikModal: true, kritikForm: { nama: '', organisasi: '', isi: 'Mohon tambah fitur ekspor.' } });
+  const before = (c2.state.kritik || []).length;
   c2.onSubmitKritik();
   assert.equal(c2.state.showKritikModal, false);
   assert.equal(c2.state.kritikForm.isi, '');
   assert.equal(c2.state.toast.type, 'ok');
+  assert.equal(c2.state.kritik.length, before + 1);
+  assert.equal(c2.state.kritik[0].isi, 'Mohon tambah fitur ekspor.');
+  assert.equal(c2.state.kritik[0].nama, 'Anonim'); // empty name defaults to Anonim
 });
 
 test('visibleWarga(): Kepala SLS is scoped to its wilayah', () => {
@@ -122,6 +146,13 @@ test('login(): rejects bad credentials, accepts a valid demo account', () => {
   ok.login();
   assert.ok(ok.state.auth);
   assert.equal(ok.state.auth.role, 'Operator');
+
+  const admin = makeInstance();
+  admin.state.loginForm = { username: 'admin', password: 'admin123', error: '' };
+  admin.login();
+  assert.equal(admin.state.auth.role, 'Admin');
+  assert.equal(admin.canCrud(), true);
+  assert.equal(admin.canViewKritik(), true);
 
   const sls = makeInstance();
   sls.state.loginForm = { username: 'sls.tembok', password: 'sls123', error: '' };

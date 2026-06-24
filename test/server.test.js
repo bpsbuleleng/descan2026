@@ -8,6 +8,7 @@ const API = 'https://script.example/exec';
 
 function makeServer() {
   const users = {
+    admin: { password: 'admin123', nama: 'Administrator', role: 'Admin', wilayah: null },
     operator: { password: 'operator123', nama: 'Komang Sutarja', role: 'Operator', wilayah: null },
     'sls.tembok': { password: 'sls123', nama: 'I Made Astawan', role: 'Kepala SLS', wilayah: 'Banjar Dinas Tembok' }
   };
@@ -19,7 +20,7 @@ function makeServer() {
   const kritik = [];
   const calls = [];
   const auth = (a) => { if (!a) return null; const u = users[String(a.username || '').toLowerCase()]; return (u && u.password === a.password) ? { username: a.username, nama: u.nama, role: u.role, wilayah: u.wilayah } : null; };
-  const canWrite = (u) => u && (u.role === 'Operator' || u.role === 'Kepala Desa');
+  const canWrite = (u) => u && (u.role === 'Admin' || u.role === 'Operator' || u.role === 'Kepala Desa');
   function handle(req) {
     const { action, auth: cred, payload } = req;
     if (action === 'login') { const u = auth(payload); return u ? { ok: true, user: u } : { ok: false, error: 'Username atau kata sandi salah.' }; }
@@ -29,7 +30,9 @@ function makeServer() {
     if (action === 'bootstrap') {
       let w = warga, s = sanggahan;
       if (u.role === 'Kepala SLS' && u.wilayah) { w = warga.filter((x) => x.dusun === u.wilayah); const ids = {}; w.forEach((x) => { ids[x.id] = 1; }); s = sanggahan.filter((x) => ids[x.wargaId]); }
-      return { ok: true, warga: w, sanggahan: s };
+      const res = { ok: true, warga: w, sanggahan: s };
+      if (u.role === 'Admin') res.kritik = kritik; // only the admin receives the inbox
+      return res;
     }
     // Menyanggah cukup butuh login (termasuk Kepala SLS), bukan hak tulis penuh.
     if (action === 'submitSanggahan') { sanggahan.push(payload.sanggahan); return { ok: true }; }
@@ -130,6 +133,29 @@ test('server mode: kritik & saran is submitted without credentials (from the log
   const last = srv.calls[srv.calls.length - 1];
   assert.equal(last.action, 'submitKritik');
   assert.equal(last.auth, null); // sent anonymously
+});
+
+test('server mode: Admin bootstrap also returns the kritik & saran inbox', async () => {
+  const srv = makeServer();
+  srv.kritik.push({ id: 'k9', nama: 'Warga Peduli', organisasi: '-', isi: 'Halo admin.', tanggal: '2026-06-20' });
+  const c = serverInstance(srv);
+  c.state.loginForm = { username: 'admin', password: 'admin123', error: '' };
+  c.login();
+  await flush();
+  assert.equal(c.state.auth.role, 'Admin');
+  assert.ok(c.state.kritik.some((k) => k.id === 'k9'), 'admin receives server kritik on bootstrap');
+});
+
+test('server mode: a non-admin bootstrap does not include the kritik inbox', async () => {
+  const srv = makeServer();
+  srv.kritik.push({ id: 'k9', nama: 'Warga', organisasi: '-', isi: 'Halo.', tanggal: '2026-06-20' });
+  const c = serverInstance(srv);
+  c.state.loginForm = { username: 'operator', password: 'operator123', error: '' };
+  c.login();
+  await flush();
+  assert.equal(c.state.auth.role, 'Operator');
+  // bootstrap returned no kritik key → client keeps its local seed, server inbox not leaked.
+  assert.ok(!c.state.kritik.some((k) => k.id === 'k9'), 'operator must not receive server kritik');
 });
 
 test('server mode: Kepala SLS may submit a sanggahan (read-only for everything else)', async () => {

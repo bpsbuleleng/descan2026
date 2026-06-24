@@ -14,10 +14,13 @@ Object.assign(Component.prototype, {
     const vIds={}; vWarga.forEach(w=>{vIds[w.id]=true;});
     const vSanggahan=st.sanggahan.filter(sg=>vIds[sg.wargaId]);
     const sanggahanPending=vSanggahan.filter(s=>s.status==='Diajukan'||s.status==='Diproses').length;
-    const titles={dashboard:'Dashboard',daftar:'Daftar Warga',form:(st.form&&!st.form.isNew)?'Edit Data':'Tambah Data',riwayat:'Riwayat Perubahan',sanggahan:'Usul Sanggah'};
+    const canViewKritik=this.canViewKritik();
+    const titles={dashboard:'Dashboard',daftar:'Daftar Warga',form:(st.form&&!st.form.isNew)?'Edit Data':'Tambah Data',riwayat:'Riwayat Perubahan',sanggahan:'Usul Sanggah',kritik:'Kotak Saran'};
 
     const mkNav=(key,label,badge)=>{ const active=st.view===key||(key==='daftar'&&(st.view==='form'||st.view==='riwayat')); return {label:label,badge:badge||0,active:active,onClick:()=>this.nav(key),style:'width:100%;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;border:none;border-radius:10px;cursor:pointer;font-family:inherit;font-size:13.5px;font-weight:'+(active?'700':'500')+';color:'+(active?'#fff':'#3d4152')+';background:'+(active?'#1e50d0':'transparent')+';transition:background 0.15s,color 0.15s;'}; };
     const navItems=[mkNav('dashboard','Dashboard'),mkNav('daftar','Daftar Warga'),mkNav('sanggahan','Sanggahan',sanggahanPending)];
+    // Admin mendapat menu Kotak Saran untuk membaca kritik & saran yang masuk.
+    if(canViewKritik) navItems.push(mkNav('kritik','Kotak Saran',(st.kritik||[]).length));
 
     const q=st.search.trim().toLowerCase();
     let list=vWarga.filter(w=>{
@@ -101,6 +104,9 @@ Object.assign(Component.prototype, {
     const sanggahanForSnap=selectedSnap&&selectedSnap.sanggahanList ? selectedSnap.sanggahanList : [];
     const canAjukanSanggahan=!st.showSanggahanForm;
 
+    // Kotak Saran (hanya Admin): kritik & saran yang masuk, terbaru di atas.
+    const kritikListDisplay=canViewKritik?(st.kritik||[]).map(k=>({id:k.id,nama:(k.nama||'Anonim'),organisasi:(k.organisasi||'-'),isi:k.isi,tanggalStr:this.formatTanggal(k.tanggal),inisial:(String(k.nama||'A').trim()[0]||'A').toUpperCase()})):[];
+
     const sgFiltered=vSanggahan.filter(sg=>st.filterSanggahan==='semua'||sg.status===st.filterSanggahan);
     const sanggahanListDisplay=sgFiltered.map(sg=>{ const wg=st.warga.find(w=>w.id===sg.wargaId); const ss=this.sgStatusStyle(sg.status); const isProcessing=st.processingId===sg.id; const canProses=sg.status==='Diajukan'; const canSelesai=sg.status==='Diproses'&&!isProcessing; const isSelesai=sg.status==='Diterima'||sg.status==='Ditolak'; const showActions=!isSelesai&&!isProcessing;
       return {id:sg.id,wargaNama:wg?wg.nama:'—',tanggalSnapshotStr:this.formatTanggal(sg.tanggalSnapshot),tanggalPengajuanStr:this.formatTanggal(sg.tanggalPengajuan),tanggalSelesaiStr:sg.tanggalSelesai?this.formatTanggal(sg.tanggalSelesai):'',pengaju:sg.pengaju,nik:sg.nik,hubungan:sg.hubungan,alasan:sg.alasan,status:sg.status,catatanOperator:sg.catatanOperator,adaCatatan:!!sg.catatanOperator,statusStyle:'display:inline-flex;align-items:center;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;color:'+ss.text+';background:'+ss.bg+';',isProcessing,canProses,canSelesai,showActions,isSelesai,processCatatan:isProcessing?st.processCatatan:'',
@@ -112,7 +118,8 @@ Object.assign(Component.prototype, {
     return {
       auth:auth, canCrud:canCrud, canSanggah:this.canSanggah(), roleLabel:auth?auth.role:'', wilayahLabel:auth&&auth.wilayah?auth.wilayah:'', serverMode:this.serverMode(),
       namaDesa:namaDesa, namaOperator:namaOperator, opInitials:opInitials, pageTitle:titles[st.view], tanggalHariIni:this.formatTanggal(st.today),
-      navItems:navItems, isDashboard:st.view==='dashboard', isDaftar:st.view==='daftar', isForm:st.view==='form', isRiwayat:st.view==='riwayat', isSanggahan:st.view==='sanggahan',
+      navItems:navItems, isDashboard:st.view==='dashboard', isDaftar:st.view==='daftar', isForm:st.view==='form', isRiwayat:st.view==='riwayat', isSanggahan:st.view==='sanggahan', isKritik:st.view==='kritik',
+      canViewKritik:canViewKritik, kritikListDisplay:kritikListDisplay, kritikKosong:kritikListDisplay.length===0, kritikCount:kritikListDisplay.length,
       search:st.search, filterDesa:st.filterDesa, filterRt:st.filterRt, filterDesil:st.filterDesil, filterBansos:st.filterBansos, filterSanggahan:st.filterSanggahan,
       onSearch:(e)=>this.onSearch(e), onFilter:(e)=>this.onFilter(e), onTambah:()=>this.onTambah(),
       desaOptions:desaOptions, rtOptions:rtOptions, desilFilterOpts:desilFilterOpts, bansosFilterOpts:bansosFilterOpts, sgFilterOpts:sgFilterOpts,
@@ -144,6 +151,7 @@ Object.assign(Component.prototype, {
     const inpL='width:100%;padding:11px 13px;border:1.5px solid #e0e0de;border-radius:9px;font-family:inherit;font-size:14px;color:#18191f;background:#fafaf9;';
     const labL='display:block;font-size:12px;font-weight:600;color:#52576b;margin-bottom:6px;';
     const demo=[
+      {r:'Admin',u:'admin',p:'admin123',note:'Akses penuh + Kotak Saran'},
       {r:'Kepala Desa',u:'kepaladesa',p:'desa123',note:'CRUD penuh'},
       {r:'Operator',u:'operator',p:'operator123',note:'CRUD penuh'},
       {r:'Kepala SLS',u:'sls.tembok',p:'sls123',note:'Hanya-lihat · B.D. Tembok'}
@@ -1094,16 +1102,48 @@ Object.assign(Component.prototype, {
             </div>
           )}
 
+          {V.isKritik && V.canViewKritik && (
+            <div style={css('display:flex; flex-direction:column; gap:16px; animation:fadein 0.2s ease;')}>
+              <div style={css('display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;')}>
+                <div>
+                  <div style={css('font-size:20px; font-weight:800; color:#18191f; letter-spacing:-0.02em;')}>Kotak Saran</div>
+                  <div style={css('font-size:12.5px; color:#9ba2b6; margin-top:3px;')}>Kritik &amp; saran yang masuk dari warga, BPD, dan masyarakat desa</div>
+                </div>
+                <span style={css('font-size:12.5px; font-weight:700; color:#1e50d0; background:#eef2fc; border:1px solid #c7d7f6; padding:6px 12px; border-radius:20px; white-space:nowrap;')}>{V.kritikCount} masukan</span>
+              </div>
+
+              {V.kritikListDisplay.map((k)=>(
+                <div key={k.id} style={css('background:#fff; border-radius:14px; padding:18px 20px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05); display:flex; gap:14px;')}>
+                  <div style={css('flex:none; width:38px; height:38px; border-radius:50%; background:#eef2fc; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800; color:#1e50d0;')}>{k.inisial}</div>
+                  <div style={css('flex:1; min-width:0; display:flex; flex-direction:column; gap:7px;')}>
+                    <div style={css('display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap;')}>
+                      <div style={css('display:flex; flex-direction:column; gap:1px; min-width:0;')}>
+                        <span style={css('font-size:14px; font-weight:700; color:#18191f;')}>{k.nama}</span>
+                        <span style={css('font-size:11.5px; color:#9ba2b6;')}>{k.organisasi}</span>
+                      </div>
+                      <span style={css('font-size:11.5px; color:#9ba2b6; white-space:nowrap; flex:none;')}>{k.tanggalStr}</span>
+                    </div>
+                    <div style={css('font-size:13.5px; color:#3d4152; line-height:1.65;')}>{k.isi}</div>
+                  </div>
+                </div>
+              ))}
+
+              {V.kritikKosong && (
+                <div style={css('background:#fff; border-radius:14px; padding:48px; text-align:center; color:#9ba2b6; font-size:13.5px; box-shadow:0 1px 3px rgba(0,0,0,0.06),0 0 0 1px rgba(0,0,0,0.05);')}>Belum ada kritik &amp; saran yang masuk.</div>
+              )}
+            </div>
+          )}
+
         </main>
         </div>
         {!V.isForm && V.isMobile && (
           <nav style={css('position:fixed;bottom:0;left:0;right:0;z-index:29;background:#fff;border-top:1px solid #e8e8e6;display:flex;height:58px;')}>
             {V.navItems.map((item,i)=>{
-              const icons=['⊞','≡','⚑'];
+              const icons=['⊞','≡','⚑','✉'];
               return (
                 <button key={i} onClick={item.onClick} style={css('flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:none;background:none;cursor:pointer;font-family:inherit;padding:0;position:relative;border-top:2px solid '+(item.active?'#1e50d0':'transparent')+';')}>
-                  <span style={css('font-size:18px;color:'+(item.active?'#1e50d0':'#9ba2b6')+';line-height:1;')}>{icons[i]}</span>
-                  <span style={css('font-size:10px;font-weight:'+(item.active?'700':'500')+';color:'+(item.active?'#1e50d0':'#9ba2b6')+';white-space:nowrap;')}>{item.label==='Daftar Warga'?'Warga':item.label==='Sanggahan'?'Sanggah':item.label}</span>
+                  <span style={css('font-size:18px;color:'+(item.active?'#1e50d0':'#9ba2b6')+';line-height:1;')}>{icons[i]||'•'}</span>
+                  <span style={css('font-size:10px;font-weight:'+(item.active?'700':'500')+';color:'+(item.active?'#1e50d0':'#9ba2b6')+';white-space:nowrap;')}>{item.label==='Daftar Warga'?'Warga':item.label==='Sanggahan'?'Sanggah':item.label==='Kotak Saran'?'Kotak':item.label}</span>
                   {item.badge>0&&<span style={css('position:absolute;top:6px;right:calc(50% - 18px);min-width:14px;height:14px;padding:0 3px;border-radius:7px;background:#dc2626;color:#fff;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;')}>{item.badge}</span>}
                 </button>);
             })}

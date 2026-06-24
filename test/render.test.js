@@ -32,6 +32,24 @@ test('opening the Kritik & Saran modal renders its form fields', () => {
   assert.match(txt, /Kritik \/ Saran/);
 });
 
+test('Admin sidebar exposes a Kotak Saran menu entry', () => {
+  const txt = render({ auth: { role: 'Admin', nama: 'Administrator', wilayah: null }, view: 'daftar' });
+  assert.match(txt, /Kotak Saran/);
+});
+
+test('Admin Kotak Saran view lists incoming kritik & saran', () => {
+  const txt = render({ auth: { role: 'Admin', nama: 'Administrator', wilayah: null }, view: 'kritik' });
+  assert.match(txt, /Kotak Saran/);
+  assert.match(txt, /masukan/);       // count chip
+  assert.match(txt, /fitur ekspor/);  // seeded kritik content surfaced to the admin
+});
+
+test('non-admin roles do not get the Kotak Saran inbox even at view=kritik', () => {
+  const txt = render({ auth: { role: 'Operator', nama: 'Op', wilayah: null }, view: 'kritik' });
+  assert.doesNotMatch(txt, /masukan/);      // inbox count chip absent
+  assert.doesNotMatch(txt, /fitur ekspor/); // inbox content absent
+});
+
 test('Kepala SLS sees the "Ajukan Sanggahan" button on a household in its banjar', () => {
   const c = makeInstance({ auth: { role: 'Kepala SLS', nama: 'I Made Astawan', wilayah: 'Banjar Dinas Tembok' } });
   c.bukaRiwayat('w13');
