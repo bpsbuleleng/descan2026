@@ -16,9 +16,9 @@ node --test       # jalankan test saja (tanpa build ulang)
 
 | File | Menguji |
 |------|---------|
-| [test/logic.test.js](test/logic.test.js)  | Logika murni: `canCrud`, `visibleWarga`, `hitungDesil`, formatter, `login`, seed (3 desa Buleleng); **kuesioner FASIH**: struktur seed (rumah/meteran/aset/anggota), `deriveSummary`, `validateKeluarga` (GALAT: NIK/No KK 16 digit, ID meteran 11/12 digit, tepat satu Kepala Keluarga, JK pasangan beda, skip-logic), gerbang `simpanKeluarga(draft\|final)`, handler roster |
-| [test/render.test.js](test/render.test.js) | Hasil `render()` per peran — gating CRUD & pembatasan wilayah; **form FASIH** menampilkan 5 blok + roster Meteran + "+ Tambah Anggota" + panel Ringkasan, tombol Finalisasi nonaktif saat GALAT>0 |
-| [test/server.test.js](test/server.test.js) | Lapisan sinkronisasi Google Sheets (mode server) dengan `fetch` tiruan; **Simpan Draf menulis langsung ke server** (`saveWarga` ber-`status:'draft'`) |
+| [test/logic.test.js](test/logic.test.js)  | Logika murni: `canCrud`, **`canSanggah`** (Kepala SLS boleh menyanggah), `visibleWarga`, `hitungDesil`, formatter, `login`, seed (3 desa Buleleng); **kuesioner FASIH**: struktur seed (rumah/meteran/aset/anggota), `deriveSummary`, `validateKeluarga` (GALAT: NIK/No KK 16 digit, ID meteran 11/12 digit, tepat satu Kepala Keluarga, JK pasangan beda, skip-logic), gerbang `simpanKeluarga(draft\|final)`, handler roster, **`onSubmitKritik` (isi wajib)** |
+| [test/render.test.js](test/render.test.js) | Hasil `render()` per peran — gating CRUD & pembatasan wilayah; **form FASIH** menampilkan 5 blok + roster Meteran + "+ Tambah Anggota" + panel Ringkasan, tombol Finalisasi nonaktif saat GALAT>0; **entri Kritik & Saran** (halaman login + sidebar + modal); **tombol "Ajukan Sanggahan" tampil bagi Kepala SLS** |
+| [test/server.test.js](test/server.test.js) | Lapisan sinkronisasi Google Sheets (mode server) dengan `fetch` tiruan; **Simpan Draf menulis langsung ke server** (`saveWarga` ber-`status:'draft'`); **`submitKritik` tanpa login** (dari halaman login); **`submitSanggahan` oleh Kepala SLS** (cukup login, bukan hak tulis penuh) |
 | [test/build.test.js](test/build.test.js)  | `vendor/app.js` harus hasil build terbaru dari `src/app.jsx` |
 
 > Aturan kunci yang diuji: **assignment hanya bisa difinalisasi bila GALAT = 0**; draf boleh disimpan kapan saja.

@@ -2,6 +2,15 @@
 node_modules/
 npm-debug.log*
 
+# Env / secrets
+.env
+.env.*
+*.local
+
+# Editor
+.vscode/
+.idea/
+
 # OS
 Thumbs.db
 .DS_Store

@@ -16,6 +16,28 @@ test('logged-out users see the login screen, not the app', () => {
   assert.doesNotMatch(txt, /Total KK/);
 });
 
+test('login screen offers a Kritik & Saran entry point', () => {
+  const txt = render({ auth: null });
+  assert.match(txt, /Sampaikan Kritik & Saran/);
+});
+
+test('sidebar exposes a Kritik & Saran button for logged-in users', () => {
+  const txt = render({ auth: { role: 'Operator', nama: 'Op', wilayah: null }, view: 'daftar' });
+  assert.match(txt, /Kritik & Saran/);
+});
+
+test('opening the Kritik & Saran modal renders its form fields', () => {
+  const txt = render({ auth: { role: 'Operator', nama: 'Op', wilayah: null }, view: 'daftar', showKritikModal: true });
+  assert.match(txt, /Organisasi/);
+  assert.match(txt, /Kritik \/ Saran/);
+});
+
+test('Kepala SLS sees the "Ajukan Sanggahan" button on a household in its banjar', () => {
+  const c = makeInstance({ auth: { role: 'Kepala SLS', nama: 'I Made Astawan', wilayah: 'Banjar Dinas Tembok' } });
+  c.bukaRiwayat('w13');
+  assert.match(treeText(c.render()), /\+ Ajukan Sanggahan/);
+});
+
 test('Operator dashboard shows all 18 households', () => {
   const txt = render({ auth: { role: 'Operator', nama: 'Komang Sutarja', wilayah: null }, view: 'dashboard' });
   assert.match(txt, /Total KK/);

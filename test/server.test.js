@@ -16,28 +16,32 @@ function makeServer() {
     { id: 'w01', nama: 'I Wayan Sukra', desa: 'Desa Sambirenteng', dusun: 'Banjar Dinas Sambirenteng', desil: 1, bansos: 'PKH + BPNT' }
   ];
   const sanggahan = [];
+  const kritik = [];
   const calls = [];
   const auth = (a) => { if (!a) return null; const u = users[String(a.username || '').toLowerCase()]; return (u && u.password === a.password) ? { username: a.username, nama: u.nama, role: u.role, wilayah: u.wilayah } : null; };
   const canWrite = (u) => u && (u.role === 'Operator' || u.role === 'Kepala Desa');
   function handle(req) {
     const { action, auth: cred, payload } = req;
     if (action === 'login') { const u = auth(payload); return u ? { ok: true, user: u } : { ok: false, error: 'Username atau kata sandi salah.' }; }
+    // Kritik & saran: pre-auth (boleh dari halaman login, tanpa kredensial).
+    if (action === 'submitKritik') { const k = (payload && (payload.kritik || payload)) || {}; if (!k.isi) return { ok: false, error: 'Isi kritik/saran kosong.' }; kritik.push(k); return { ok: true }; }
     const u = auth(cred); if (!u) return { ok: false, error: 'unauth' };
     if (action === 'bootstrap') {
       let w = warga, s = sanggahan;
       if (u.role === 'Kepala SLS' && u.wilayah) { w = warga.filter((x) => x.dusun === u.wilayah); const ids = {}; w.forEach((x) => { ids[x.id] = 1; }); s = sanggahan.filter((x) => ids[x.wargaId]); }
       return { ok: true, warga: w, sanggahan: s };
     }
+    // Menyanggah cukup butuh login (termasuk Kepala SLS), bukan hak tulis penuh.
+    if (action === 'submitSanggahan') { sanggahan.push(payload.sanggahan); return { ok: true }; }
     if (!canWrite(u)) return { ok: false, error: 'Hanya Operator & Kepala Desa yang boleh mengubah data.' };
     if (action === 'saveWarga') { const i = warga.findIndex((x) => x.id === payload.warga.id); if (i >= 0) warga[i] = payload.warga; else warga.push(payload.warga); return { ok: true }; }
-    if (action === 'submitSanggahan') { sanggahan.push(payload.sanggahan); return { ok: true }; }
     if (action === 'updateSanggahan') { return { ok: true }; }
     if (action === 'uploadFoto') { return { ok: true, fileId: 'F1', url: 'https://lh3.googleusercontent.com/d/F1=w1200' }; }
     if (action === 'reset') { return { ok: true }; }
     return { ok: false, error: 'unknown' };
   }
   const fetch = (url, opt) => { const req = JSON.parse(opt.body); calls.push(req); return Promise.resolve({ json: () => Promise.resolve(handle(req)) }); };
-  return { fetch, calls, warga, sanggahan };
+  return { fetch, calls, warga, sanggahan, kritik };
 }
 
 function serverInstance(srv) {
@@ -113,6 +117,38 @@ test('server mode: saving a draft writes straight to the spreadsheet with status
   assert.equal(last.payload.warga.status, 'draft');
   assert.equal(last.payload.warga.nama, 'KK Draf Server');
   assert.ok(srv.warga.some((w) => w.nama === 'KK Draf Server'), 'draft persisted to the (fake) spreadsheet');
+});
+
+test('server mode: kritik & saran is submitted without credentials (from the login screen)', async () => {
+  const srv = makeServer();
+  const c = serverInstance(srv); // not logged in: _cred stays null
+  c.state.kritikForm = { nama: 'Warga Peduli', organisasi: 'BPD', isi: 'Mohon tampilan dipermudah.' };
+  c.onSubmitKritik();
+  await flush();
+  assert.equal(srv.kritik.length, 1);
+  assert.equal(srv.kritik[0].isi, 'Mohon tampilan dipermudah.');
+  const last = srv.calls[srv.calls.length - 1];
+  assert.equal(last.action, 'submitKritik');
+  assert.equal(last.auth, null); // sent anonymously
+});
+
+test('server mode: Kepala SLS may submit a sanggahan (read-only for everything else)', async () => {
+  const srv = makeServer();
+  const c = serverInstance(srv);
+  c.state.loginForm = { username: 'sls.tembok', password: 'sls123', error: '' };
+  c.login();
+  await flush();
+  assert.equal(c.state.auth.role, 'Kepala SLS');
+  // Target a snapshot directly (avoids needing snapshot data on the fake server row).
+  c.state.selectedId = 'w13';
+  c.state.selectedTanggal = c.state.today;
+  c.state.sanggahanForm = { pengaju: 'Kelian Tembok', nik: '-', hubungan: 'RT/RW', alasan: 'Mohon ditinjau ulang.' };
+  c.onSubmitSanggahan();
+  await flush();
+  const last = srv.calls[srv.calls.length - 1];
+  assert.equal(last.action, 'submitSanggahan');
+  assert.equal(last.auth.username, 'sls.tembok'); // credentials attached
+  assert.equal(srv.sanggahan.length, 1);
 });
 
 test('server mode: a captured photo is uploaded to Drive and its URL stored on the form', async () => {
